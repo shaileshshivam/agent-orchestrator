@@ -30,7 +30,7 @@ import {
 } from "@composio/ao-core";
 import { exec, execSilent } from "../lib/shell.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
-import { findWebDir, buildDashboardEnv, waitForPortAndOpen, isPortAvailable, findFreePort } from "../lib/web-dir.js";
+import { findWebDir, buildDashboardEnv, waitForPortAndOpen, isPortAvailable, findFreePort, MAX_PORT_SCAN } from "../lib/web-dir.js";
 import { cleanNextCache } from "../lib/dashboard-rebuild.js";
 import { preflight } from "../lib/preflight.js";
 
@@ -266,7 +266,7 @@ async function runStartup(
         const newPort = await findFreePort(DEFAULT_PORT);
         if (newPort === null) {
           throw new Error(
-            `No free port found in range ${DEFAULT_PORT}–${DEFAULT_PORT + 99}.`,
+            `No free port found in range ${DEFAULT_PORT}–${DEFAULT_PORT + MAX_PORT_SCAN - 1}.`,
           );
         }
         port = newPort;

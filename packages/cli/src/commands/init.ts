@@ -7,7 +7,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { generateSessionPrefix } from "@composio/ao-core";
 import { git, gh, execSilent } from "../lib/shell.js";
-import { findFreePort } from "../lib/web-dir.js";
+import { findFreePort, MAX_PORT_SCAN } from "../lib/web-dir.js";
 import {
   detectProjectType,
   generateRulesFromTemplates,
@@ -15,7 +15,6 @@ import {
 } from "../lib/project-detection.js";
 
 const DEFAULT_PORT = 3000;
-const MAX_PORT_SCAN = 100;
 
 async function prompt(
   rl: ReturnType<typeof createInterface>,

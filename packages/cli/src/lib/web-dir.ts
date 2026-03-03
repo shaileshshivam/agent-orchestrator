@@ -37,12 +37,15 @@ export function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
+/** How many consecutive ports to scan before giving up. */
+export const MAX_PORT_SCAN = 100;
+
 /**
  * Find the first available port starting from `start`, scanning upward.
  * Returns `null` if no free port is found within `maxScan` attempts.
  * Shared between `ao init` and `ao start <url>`.
  */
-export async function findFreePort(start: number, maxScan = 100): Promise<number | null> {
+export async function findFreePort(start: number, maxScan = MAX_PORT_SCAN): Promise<number | null> {
   for (let port = start; port < start + maxScan; port++) {
     if (await isPortAvailable(port)) return port;
   }
