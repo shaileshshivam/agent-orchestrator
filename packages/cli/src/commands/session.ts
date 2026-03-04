@@ -4,7 +4,6 @@ import { loadConfig, SessionNotRestorableError, WorkspaceMissingError } from "@c
 import { git, getTmuxActivity } from "../lib/shell.js";
 import { formatAge } from "../lib/format.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
-import { getSCM } from "../lib/plugins.js";
 
 export function registerSession(program: Command): void {
   const session = program.command("session").description("Session management (ls, kill, cleanup)");
@@ -210,39 +209,28 @@ export function registerSession(program: Command): void {
         process.exit(1);
       }
 
-      // Look up the PR via SCM plugin to get the full URL and validate it exists
-      const scm = getSCM(config, session.projectId);
-      const [owner, repo] = project.repo.split("/");
-      if (!owner || !repo) {
-        console.error(chalk.red(`Invalid repo format "${project.repo}", expected "owner/repo"`));
-        process.exit(1);
-      }
-
       try {
-        // Build a minimal PRInfo to query the PR state
-        const prInfo = {
-          number: prNumber,
-          url: `https://github.com/${project.repo}/pull/${prNumber}`,
-          title: "",
-          owner,
-          repo,
-          branch: session.branch ?? "",
-          baseBranch: "",
-          isDraft: false,
-        };
-
-        // Validate the PR exists by fetching its state
-        const prState = await scm.getPRState(prInfo);
+        // Use `gh pr view` to get the actual PR URL (supports GitHub Enterprise)
+        // and validate the PR exists in a single call.
+        const { exec } = await import("../lib/shell.js");
+        const { stdout } = await exec("gh", [
+          "pr", "view", String(prNumber),
+          "--repo", project.repo,
+          "--json", "url,state",
+        ]);
+        const data = JSON.parse(stdout) as { url: string; state: string };
+        const prUrl = data.url;
+        const prState = data.state.toLowerCase();
 
         // Persist the PR URL in session metadata
         const { updateMetadata, getSessionsDir } = await import("@composio/ao-core");
         const sessionsDir = getSessionsDir(config.configPath, project.path);
-        updateMetadata(sessionsDir, sessionName, { pr: prInfo.url });
+        updateMetadata(sessionsDir, sessionName, { pr: prUrl });
 
         console.log(
           chalk.green(`\nLinked session ${sessionName} to PR #${prNumber} (${prState})`),
         );
-        console.log(chalk.dim(`  URL: ${prInfo.url}`));
+        console.log(chalk.dim(`  URL: ${prUrl}`));
       } catch (err) {
         console.error(
           chalk.red(`Failed to link PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}`),

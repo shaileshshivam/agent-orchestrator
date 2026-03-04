@@ -15,6 +15,7 @@ import { statSync, existsSync, readdirSync, writeFileSync, mkdirSync } from "nod
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { getLiveBranch } from "./utils.js";
 import {
   isIssueNotFoundError,
   isRestorable,
@@ -59,28 +60,6 @@ import {
 } from "./paths.js";
 
 const execFileAsync = promisify(execFileCb);
-
-/** Valid git branch name: no whitespace, no curly braces, no JSON-like content. */
-const VALID_BRANCH_RE = /^[^\s{}[\]"]+$/;
-
-/**
- * Get the current branch from a workspace path.
- * Returns null if the workspace doesn't exist, isn't a git repo, or git fails.
- */
-async function getLiveBranch(workspacePath: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["branch", "--show-current"],
-      { cwd: workspacePath, timeout: 10_000 },
-    );
-    const branch = stdout.trim();
-    if (branch && VALID_BRANCH_RE.test(branch)) return branch;
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 /** Escape regex metacharacters in a string. */
 function escapeRegex(str: string): string {
@@ -393,54 +372,30 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
       }
     }
 
-    // Resolve linked PR if --pr was specified
+    // Resolve linked PR if --pr was specified.
+    // Uses `gh pr view` to fetch the actual PR URL and head branch in a single call,
+    // avoiding hardcoded github.com URLs (supports GitHub Enterprise).
     let linkedPrUrl: string | undefined;
     let linkedPrBranch: string | undefined;
-    if (spawnConfig.prNumber && plugins.scm) {
-      const parts = project.repo.split("/");
-      if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        throw new Error(`Invalid repo format "${project.repo}", expected "owner/repo"`);
-      }
-      const [owner, repo] = parts;
-      const prInfo = {
-        number: spawnConfig.prNumber,
-        url: `https://github.com/${project.repo}/pull/${spawnConfig.prNumber}`,
-        title: "",
-        owner,
-        repo,
-        branch: "",
-        baseBranch: "",
-        isDraft: false,
-      };
-      // Validate PR exists
-      await plugins.scm.getPRState(prInfo);
-      linkedPrUrl = prInfo.url;
-
-      // Detect the PR's head branch to use as the session branch
-      // Build a minimal session for detectPR to resolve full PR info
-      const detected = await plugins.scm.detectPR(
-        { branch: null, id: "", projectId: spawnConfig.projectId, status: "spawning",
-          activity: null, issueId: null, pr: null, workspacePath: null,
-          runtimeHandle: null, agentInfo: null, createdAt: new Date(),
-          lastActivityAt: new Date(), metadata: {} },
-        project,
-      );
-      // If detectPR didn't help, query the PR directly for its head branch
-      if (!detected || detected.number !== spawnConfig.prNumber) {
-        // Use gh pr view to get the head branch
-        try {
-          const { stdout } = await execFileAsync(
-            "gh",
-            ["pr", "view", String(spawnConfig.prNumber), "--repo", project.repo, "--json", "headRefName"],
-            { timeout: 30_000 },
-          );
-          const data = JSON.parse(stdout) as { headRefName: string };
-          linkedPrBranch = data.headRefName;
-        } catch {
-          // Fall through — branch will be determined by normal logic
-        }
-      } else {
-        linkedPrBranch = detected.branch;
+    if (spawnConfig.prNumber) {
+      try {
+        const { stdout } = await execFileAsync(
+          "gh",
+          [
+            "pr", "view", String(spawnConfig.prNumber),
+            "--repo", project.repo,
+            "--json", "url,headRefName",
+          ],
+          { timeout: 30_000 },
+        );
+        const data = JSON.parse(stdout) as { url: string; headRefName: string };
+        linkedPrUrl = data.url;
+        linkedPrBranch = data.headRefName;
+      } catch (err) {
+        throw new Error(
+          `PR #${spawnConfig.prNumber} not found in ${project.repo}: ${(err as Error).message}`,
+          { cause: err },
+        );
       }
     }
 

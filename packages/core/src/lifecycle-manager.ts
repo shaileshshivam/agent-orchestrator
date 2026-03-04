@@ -11,8 +11,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { execFile as execFileCb } from "node:child_process";
-import { promisify } from "node:util";
 import {
   SESSION_STATUS,
   PR_STATE,
@@ -37,31 +35,7 @@ import {
 } from "./types.js";
 import { updateMetadata } from "./metadata.js";
 import { getSessionsDir } from "./paths.js";
-
-const execFileAsync = promisify(execFileCb);
-
-/** Valid git branch name: no whitespace, no curly braces, no JSON-like content. */
-const VALID_BRANCH_RE = /^[^\s{}[\]"]+$/;
-
-/**
- * Get the current branch from a workspace path.
- * Returns null if the workspace doesn't exist, isn't a git repo, or git fails.
- */
-async function getLiveBranch(workspacePath: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["branch", "--show-current"],
-      { cwd: workspacePath, timeout: 10_000 },
-    );
-    const branch = stdout.trim();
-    // Validate it looks like a real branch name (not mocked/garbage output)
-    if (branch && VALID_BRANCH_RE.test(branch)) return branch;
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { getLiveBranch } from "./utils.js";
 
 /** Parse a duration string like "10m", "30s", "1h" to milliseconds. */
 function parseDuration(str: string): number {
