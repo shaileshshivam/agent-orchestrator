@@ -28,6 +28,11 @@ export function registerLifecycleWorker(program: Command): void {
 
       const existing = getLifecycleWorkerStatus(config, projectId);
       if (existing.running && existing.pid !== process.pid) {
+        // Another lifecycle worker is already running for this project — exit
+        // silently to avoid duplicate polling loops.
+        console.log(
+          `[ao lifecycle] Worker already running for ${projectId} (pid=${existing.pid}), exiting.`,
+        );
         return;
       }
 
@@ -40,7 +45,21 @@ export function registerLifecycleWorker(program: Command): void {
         shuttingDown = true;
         lifecycle.stop();
         clearLifecycleWorkerPid(config, projectId, process.pid);
-        process.exit(code);
+        // Flush stdout/stderr before exiting so crash messages reach the log file
+        const done = (): void => process.exit(code);
+        if (process.stdout.writableFinished && process.stderr.writableFinished) {
+          done();
+        } else {
+          let flushed = 0;
+          const tryExit = (): void => {
+            flushed++;
+            if (flushed >= 2) done();
+          };
+          process.stdout.write("", tryExit);
+          process.stderr.write("", tryExit);
+          // Hard exit if flush hangs
+          setTimeout(done, 1_000).unref();
+        }
       };
 
       process.on("SIGINT", () => shutdown(0));
@@ -58,6 +77,13 @@ export function registerLifecycleWorker(program: Command): void {
       console.log(
         `[ao lifecycle] Started for ${projectId} (pid=${process.pid}, interval=${intervalMs}ms)`,
       );
+
+      // Periodic heartbeat so we can verify the worker is alive from the log
+      const heartbeat = setInterval(() => {
+        console.log(`[ao lifecycle] Heartbeat for ${projectId} (pid=${process.pid})`);
+      }, 5 * 60_000); // every 5 minutes
+      heartbeat.unref();
+
       lifecycle.start(intervalMs);
     });
 }

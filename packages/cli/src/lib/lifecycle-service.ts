@@ -190,6 +190,7 @@ export async function ensureLifecycleWorker(
       env: {
         ...process.env,
         AO_LIFECYCLE_PROJECT: projectId,
+        AO_CONFIG_PATH: config.configPath,
       },
     });
 
