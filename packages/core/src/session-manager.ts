@@ -115,19 +115,11 @@ async function discoverOpenCodeSessionIdsByTitle(
     const parsed = safeJsonParse<Array<Record<string, unknown>>>(stdout);
     if (!parsed) return [];
     const title = `AO:${sessionId}`;
-    const candidates = parsed
-      .filter((entry) => {
-        const candidateTitle = typeof entry["title"] === "string" ? entry["title"] : "";
-        const candidateId = typeof entry["id"] === "string" ? entry["id"] : "";
-        return candidateTitle === title && candidateId.length > 0;
-      })
-      .sort((a, b) => {
-        const aUpdated = Date.parse(typeof a["updated"] === "string" ? a["updated"] : "");
-        const bUpdated = Date.parse(typeof b["updated"] === "string" ? b["updated"] : "");
-        const aScore = Number.isNaN(aUpdated) ? 0 : aUpdated;
-        const bScore = Number.isNaN(bUpdated) ? 0 : bUpdated;
-        return bScore - aScore;
-      });
+    const candidates = parsed.filter((entry) => {
+      const candidateTitle = typeof entry["title"] === "string" ? entry["title"] : "";
+      const candidateId = typeof entry["id"] === "string" ? entry["id"] : "";
+      return candidateTitle === title && candidateId.length > 0;
+    });
 
     return candidates
       .map((entry) => asValidOpenCodeSessionId(entry["id"]))
@@ -427,6 +419,10 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
         await deleteOpenCodeSession(openCodeSessionId);
       }
       return undefined;
+    }
+
+    if (candidateIds.length === 0 && criteria.sessionId) {
+      candidateIds = await discoverOpenCodeSessionIdsByTitle(criteria.sessionId);
     }
 
     return candidateIds[0];
@@ -810,10 +806,24 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
 
       if (plugins.agent.postLaunchSetup) {
         await plugins.agent.postLaunchSetup(session);
+      }
 
-        if (Object.keys(session.metadata || {}).length > 0) {
-          updateMetadata(sessionsDir, sessionId, session.metadata);
+      if (
+        plugins.agent.name === "opencode" &&
+        opencodeIssueSessionStrategy === "reuse" &&
+        !session.metadata["opencodeSessionId"]
+      ) {
+        const discovered = await discoverOpenCodeSessionIdByTitle(
+          sessionId,
+          OPENCODE_INTERACTIVE_DISCOVERY_TIMEOUT_MS,
+        );
+        if (discovered) {
+          session.metadata["opencodeSessionId"] = discovered;
         }
+      }
+
+      if (Object.keys(session.metadata || {}).length > 0) {
+        updateMetadata(sessionsDir, sessionId, session.metadata);
       }
     } catch (err) {
       // Clean up runtime and workspace on post-launch failure
@@ -988,7 +998,9 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
       agentInfo: null,
       createdAt: new Date(),
       lastActivityAt: new Date(),
-      metadata: {},
+      metadata: {
+        ...(reusableOpenCodeSessionId ? { opencodeSessionId: reusableOpenCodeSessionId } : {}),
+      },
     };
 
     try {
@@ -1007,10 +1019,24 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
 
       if (plugins.agent.postLaunchSetup) {
         await plugins.agent.postLaunchSetup(session);
+      }
 
-        if (Object.keys(session.metadata || {}).length > 0) {
-          updateMetadata(sessionsDir, sessionId, session.metadata);
+      if (
+        plugins.agent.name === "opencode" &&
+        orchestratorSessionStrategy === "reuse" &&
+        !session.metadata["opencodeSessionId"]
+      ) {
+        const discovered = await discoverOpenCodeSessionIdByTitle(
+          sessionId,
+          OPENCODE_INTERACTIVE_DISCOVERY_TIMEOUT_MS,
+        );
+        if (discovered) {
+          session.metadata["opencodeSessionId"] = discovered;
         }
+      }
+
+      if (Object.keys(session.metadata || {}).length > 0) {
+        updateMetadata(sessionsDir, sessionId, session.metadata);
       }
     } catch (err) {
       // Clean up runtime on post-launch failure

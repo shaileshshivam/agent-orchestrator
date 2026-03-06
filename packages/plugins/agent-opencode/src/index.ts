@@ -113,7 +113,7 @@ function createOpenCodeAgent(): Agent {
         const runCommand = promptValue
           ? ["opencode", "run", ...runOptions, promptValue].join(" ")
           : ["opencode", "run", ...runOptions, "--command", "true"].join(" ");
-        const continueSession = `"$(opencode session list --format json | node -e ${shellEscape("let input='';process.stdin.on('data',c=>input+=c).on('end',()=>{const title=process.argv[1];const rows=JSON.parse(input);if(!Array.isArray(rows))process.exit(1);const matches=rows.filter((r)=>r&&r.title===title&&typeof r.id==='string').sort((a,b)=>{const aUpdated=Date.parse(typeof a.updated==='string'?a.updated:'');const bUpdated=Date.parse(typeof b.updated==='string'?b.updated:'');const aScore=Number.isNaN(aUpdated)?0:aUpdated;const bScore=Number.isNaN(bUpdated)?0:bUpdated;return bScore-aScore;});if(matches.length===0)process.exit(1);process.stdout.write(matches[0].id);});")} ${shellEscape(`AO:${config.sessionId}`)})"`;
+        const continueSession = `"$(opencode session list --format json | node -e ${shellEscape("let input='';process.stdin.on('data',c=>input+=c).on('end',()=>{const title=process.argv[1];const rows=JSON.parse(input);if(!Array.isArray(rows))process.exit(1);const matches=rows.filter((r)=>r&&r.title===title&&typeof r.id==='string');if(matches.length===0)process.exit(1);process.stdout.write(matches[0].id);});")} ${shellEscape(`AO:${config.sessionId}`)})"`;
         const continueCommand = ["opencode", "--session", continueSession, ...sharedOptions].join(
           " ",
         );
