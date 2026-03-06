@@ -1724,6 +1724,161 @@ describe("restore", () => {
   });
 });
 
+describe("claimPR", () => {
+  function makeSCM(overrides: Partial<SCM> = {}): SCM {
+    return {
+      name: "mock-scm",
+      detectPR: vi.fn(),
+      resolvePR: vi.fn().mockResolvedValue({
+        number: 42,
+        url: "https://github.com/org/my-app/pull/42",
+        title: "Existing PR",
+        owner: "org",
+        repo: "my-app",
+        branch: "feat/existing-pr",
+        baseBranch: "main",
+        isDraft: false,
+      }),
+      assignPRToCurrentUser: vi.fn().mockResolvedValue(undefined),
+      checkoutPR: vi.fn().mockResolvedValue(true),
+      getPRState: vi.fn().mockResolvedValue("open"),
+      getPRSummary: vi.fn(),
+      mergePR: vi.fn(),
+      closePR: vi.fn(),
+      getCIChecks: vi.fn(),
+      getCISummary: vi.fn(),
+      getReviews: vi.fn(),
+      getReviewDecision: vi.fn(),
+      getPendingComments: vi.fn(),
+      getAutomatedComments: vi.fn(),
+      getMergeability: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  function registryWithSCM(mockSCM: SCM): PluginRegistry {
+    return {
+      ...mockRegistry,
+      get: vi.fn().mockImplementation((slot: string, _name: string) => {
+        if (slot === "runtime") return mockRuntime;
+        if (slot === "agent") return mockAgent;
+        if (slot === "workspace") return mockWorkspace;
+        if (slot === "scm") return mockSCM;
+        return null;
+      }),
+    };
+  }
+
+  it("claims an open PR and updates session metadata", async () => {
+    const mockSCM = makeSCM();
+
+    writeMetadata(sessionsDir, "app-2", {
+      worktree: "/tmp/ws-app-2",
+      branch: "feat/old-branch",
+      status: "working",
+      project: "my-app",
+      runtimeHandle: JSON.stringify(makeHandle("rt-2")),
+    });
+
+    const sm = createSessionManager({ config, registry: registryWithSCM(mockSCM) });
+    const result = await sm.claimPR("app-2", "42");
+
+    expect(result.pr.number).toBe(42);
+    expect(result.branchChanged).toBe(true);
+
+    expect(mockSCM.resolvePR).toHaveBeenCalledWith("42", config.projects["my-app"]);
+    expect(mockSCM.checkoutPR).toHaveBeenCalledWith(result.pr, "/tmp/ws-app-2");
+
+    const raw = readMetadataRaw(sessionsDir, "app-2");
+    expect(raw).toMatchObject({
+      branch: "feat/existing-pr",
+      status: "pr_open",
+      pr: "https://github.com/org/my-app/pull/42",
+    });
+    expect(raw!["prAutoDetect"]).toBeUndefined();
+  });
+
+  it("supports takeover by disabling PR auto-detect on the previous session", async () => {
+    const mockSCM = makeSCM();
+
+    writeMetadata(sessionsDir, "app-1", {
+      worktree: "/tmp/ws-app-1",
+      branch: "feat/existing-pr",
+      status: "review_pending",
+      project: "my-app",
+      pr: "https://github.com/org/my-app/pull/42",
+      runtimeHandle: JSON.stringify(makeHandle("rt-1")),
+    });
+
+    writeMetadata(sessionsDir, "app-2", {
+      worktree: "/tmp/ws-app-2",
+      branch: "feat/other-work",
+      status: "working",
+      project: "my-app",
+      runtimeHandle: JSON.stringify(makeHandle("rt-2")),
+    });
+
+    const sm = createSessionManager({ config, registry: registryWithSCM(mockSCM) });
+    const result = await sm.claimPR("app-2", "42", { takeover: true });
+
+    expect(result.takenOverFrom).toEqual(["app-1"]);
+
+    const previous = readMetadataRaw(sessionsDir, "app-1");
+    expect(previous!["pr"]).toBeUndefined();
+    expect(previous!["prAutoDetect"]).toBe("off");
+    expect(previous!["status"]).toBe("working");
+  });
+
+  it("rejects takeover when another session already tracks the PR", async () => {
+    const mockSCM = makeSCM();
+
+    writeMetadata(sessionsDir, "app-1", {
+      worktree: "/tmp/ws-app-1",
+      branch: "feat/existing-pr",
+      status: "pr_open",
+      project: "my-app",
+      pr: "https://github.com/org/my-app/pull/42",
+      runtimeHandle: JSON.stringify(makeHandle("rt-1")),
+    });
+
+    writeMetadata(sessionsDir, "app-2", {
+      worktree: "/tmp/ws-app-2",
+      branch: "feat/other-work",
+      status: "working",
+      project: "my-app",
+      runtimeHandle: JSON.stringify(makeHandle("rt-2")),
+    });
+
+    const sm = createSessionManager({ config, registry: registryWithSCM(mockSCM) });
+
+    await expect(sm.claimPR("app-2", "42")).rejects.toThrow("already tracked by app-1");
+  });
+
+  it("keeps AO metadata updated even if GitHub assignment fails", async () => {
+    const mockSCM = makeSCM({
+      assignPRToCurrentUser: vi.fn().mockRejectedValue(new Error("permission denied")),
+    });
+
+    writeMetadata(sessionsDir, "app-2", {
+      worktree: "/tmp/ws-app-2",
+      branch: "feat/old-branch",
+      status: "working",
+      project: "my-app",
+      runtimeHandle: JSON.stringify(makeHandle("rt-2")),
+    });
+
+    const sm = createSessionManager({ config, registry: registryWithSCM(mockSCM) });
+    const result = await sm.claimPR("app-2", "42", { assignOnGithub: true });
+
+    expect(result.githubAssigned).toBe(false);
+    expect(result.githubAssignmentError).toContain("permission denied");
+
+    const raw = readMetadataRaw(sessionsDir, "app-2");
+    expect(raw!["pr"]).toBe("https://github.com/org/my-app/pull/42");
+    expect(raw!["status"]).toBe("pr_open");
+  });
+});
+
 describe("PluginRegistry.loadBuiltins importFn", () => {
   it("should use provided importFn instead of built-in import", async () => {
     const { createPluginRegistry: createReg } = await import("../plugin-registry.js");

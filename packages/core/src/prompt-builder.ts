@@ -24,6 +24,7 @@ export const BASE_AGENT_PROMPT = `You are an AI coding agent managed by the Agen
 ## Session Lifecycle
 - You are running inside a managed session. Focus on the assigned task.
 - When you finish your work, create a PR and push it. The orchestrator will handle CI monitoring and review routing.
+- If you're told to take over or continue work on an existing PR, run \`ao session claim-pr <pr-number-or-url>\` from inside this session before making changes.
 - If CI fails, the orchestrator will send you the failures — fix them and push again.
 - If reviewers request changes, the orchestrator will forward their comments — address each one, push fixes, and reply to the comments.
 

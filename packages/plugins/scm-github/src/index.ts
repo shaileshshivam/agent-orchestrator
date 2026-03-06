@@ -58,6 +58,36 @@ async function gh(args: string[]): Promise<string> {
   }
 }
 
+async function ghInDir(args: string[], cwd: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("gh", args, {
+      cwd,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 30_000,
+    });
+    return stdout.trim();
+  } catch (err) {
+    throw new Error(`gh ${args.slice(0, 3).join(" ")} failed: ${(err as Error).message}`, {
+      cause: err,
+    });
+  }
+}
+
+async function git(args: string[], cwd: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", args, {
+      cwd,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 30_000,
+    });
+    return stdout.trim();
+  } catch (err) {
+    throw new Error(`git ${args.slice(0, 3).join(" ")} failed: ${(err as Error).message}`, {
+      cause: err,
+    });
+  }
+}
+
 function repoFlag(pr: PRInfo): string {
   return `${pr.owner}/${pr.repo}`;
 }
@@ -66,6 +96,39 @@ function parseDate(val: string | undefined | null): Date {
   if (!val) return new Date(0);
   const d = new Date(val);
   return isNaN(d.getTime()) ? new Date(0) : d;
+}
+
+function assertProjectRepo(projectRepo: string): void {
+  const [owner, repo] = projectRepo.split("/");
+  if (!owner || !repo) {
+    throw new Error(`Invalid repo format "${projectRepo}", expected "owner/repo"`);
+  }
+}
+
+function prInfoFromView(
+  data: {
+    number: number;
+    url: string;
+    title: string;
+    headRefName: string;
+    baseRefName: string;
+    isDraft: boolean;
+  },
+  projectRepo: string,
+): PRInfo {
+  assertProjectRepo(projectRepo);
+  const [owner, repo] = projectRepo.split("/");
+
+  return {
+    number: data.number,
+    url: data.url,
+    title: data.title,
+    owner,
+    repo,
+    branch: data.headRefName,
+    baseBranch: data.baseRefName,
+    isDraft: data.isDraft,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -78,12 +141,8 @@ function createGitHubSCM(): SCM {
 
     async detectPR(session: Session, project: ProjectConfig): Promise<PRInfo | null> {
       if (!session.branch) return null;
+      assertProjectRepo(project.repo);
 
-      const parts = project.repo.split("/");
-      if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        throw new Error(`Invalid repo format "${project.repo}", expected "owner/repo"`);
-      }
-      const [owner, repo] = parts;
       try {
         const raw = await gh([
           "pr",
@@ -109,20 +168,52 @@ function createGitHubSCM(): SCM {
 
         if (prs.length === 0) return null;
 
-        const pr = prs[0];
-        return {
-          number: pr.number,
-          url: pr.url,
-          title: pr.title,
-          owner,
-          repo,
-          branch: pr.headRefName,
-          baseBranch: pr.baseRefName,
-          isDraft: pr.isDraft,
-        };
+        return prInfoFromView(prs[0], project.repo);
       } catch {
         return null;
       }
+    },
+
+    async resolvePR(reference: string, project: ProjectConfig): Promise<PRInfo> {
+      const raw = await gh([
+        "pr",
+        "view",
+        reference,
+        "--repo",
+        project.repo,
+        "--json",
+        "number,url,title,headRefName,baseRefName,isDraft",
+      ]);
+
+      const data: {
+        number: number;
+        url: string;
+        title: string;
+        headRefName: string;
+        baseRefName: string;
+        isDraft: boolean;
+      } = JSON.parse(raw);
+
+      return prInfoFromView(data, project.repo);
+    },
+
+    async assignPRToCurrentUser(pr: PRInfo): Promise<void> {
+      await gh(["pr", "edit", String(pr.number), "--repo", repoFlag(pr), "--add-assignee", "@me"]);
+    },
+
+    async checkoutPR(pr: PRInfo, workspacePath: string): Promise<boolean> {
+      const currentBranch = await git(["branch", "--show-current"], workspacePath);
+      if (currentBranch === pr.branch) return false;
+
+      const dirty = await git(["status", "--porcelain"], workspacePath);
+      if (dirty) {
+        throw new Error(
+          `Workspace has uncommitted changes; cannot switch to PR branch "${pr.branch}" safely`,
+        );
+      }
+
+      await ghInDir(["pr", "checkout", String(pr.number), "--repo", repoFlag(pr)], workspacePath);
+      return true;
     },
 
     async getPRState(pr: PRInfo): Promise<PRState> {

@@ -188,6 +188,80 @@ describe("scm-github plugin", () => {
     });
   });
 
+  // ---- resolvePR ---------------------------------------------------------
+
+  describe("resolvePR", () => {
+    it("resolves a PR number into canonical PR info", async () => {
+      mockGh({
+        number: 42,
+        url: "https://github.com/acme/repo/pull/42",
+        title: "feat: add feature",
+        headRefName: "feat/my-feature",
+        baseRefName: "main",
+        isDraft: false,
+      });
+
+      await expect(scm.resolvePR?.("42", project)).resolves.toEqual(pr);
+    });
+  });
+
+  // ---- assignPRToCurrentUser --------------------------------------------
+
+  describe("assignPRToCurrentUser", () => {
+    it("assigns the PR to the authenticated user", async () => {
+      ghMock.mockResolvedValueOnce({ stdout: "" });
+
+      await scm.assignPRToCurrentUser?.(pr);
+
+      expect(ghMock).toHaveBeenCalledWith(
+        "gh",
+        ["pr", "edit", "42", "--repo", "acme/repo", "--add-assignee", "@me"],
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ---- checkoutPR --------------------------------------------------------
+
+  describe("checkoutPR", () => {
+    it("returns false when already on the PR branch", async () => {
+      ghMock.mockResolvedValueOnce({ stdout: "feat/my-feature\n" });
+
+      await expect(scm.checkoutPR?.(pr, "/tmp/repo")).resolves.toBe(false);
+
+      expect(ghMock).toHaveBeenCalledTimes(1);
+      expect(ghMock).toHaveBeenCalledWith(
+        "git",
+        ["branch", "--show-current"],
+        expect.objectContaining({ cwd: "/tmp/repo" }),
+      );
+    });
+
+    it("throws when switching branches would discard local changes", async () => {
+      ghMock.mockResolvedValueOnce({ stdout: "main\n" });
+      ghMock.mockResolvedValueOnce({ stdout: " M src/index.ts\n" });
+
+      await expect(scm.checkoutPR?.(pr, "/tmp/repo")).rejects.toThrow(
+        'Workspace has uncommitted changes; cannot switch to PR branch "feat/my-feature" safely',
+      );
+    });
+
+    it("checks out the PR when the workspace is clean", async () => {
+      ghMock.mockResolvedValueOnce({ stdout: "main\n" });
+      ghMock.mockResolvedValueOnce({ stdout: "" });
+      ghMock.mockResolvedValueOnce({ stdout: "" });
+
+      await expect(scm.checkoutPR?.(pr, "/tmp/repo")).resolves.toBe(true);
+
+      expect(ghMock).toHaveBeenNthCalledWith(
+        3,
+        "gh",
+        ["pr", "checkout", "42", "--repo", "acme/repo"],
+        expect.objectContaining({ cwd: "/tmp/repo" }),
+      );
+    });
+  });
+
   // ---- mergePR -----------------------------------------------------------
 
   describe("mergePR", () => {

@@ -15,6 +15,7 @@ const { mockExec, mockConfigRef, mockSessionManager } = vi.hoisted(() => ({
     spawn: vi.fn(),
     spawnOrchestrator: vi.fn(),
     send: vi.fn(),
+    claimPR: vi.fn(),
   },
 }));
 
@@ -291,17 +292,17 @@ describe("spawn command", () => {
   });
 
   it("rejects unknown project ID", async () => {
-    await expect(
-      program.parseAsync(["node", "test", "spawn", "nonexistent"]),
-    ).rejects.toThrow("process.exit(1)");
+    await expect(program.parseAsync(["node", "test", "spawn", "nonexistent"])).rejects.toThrow(
+      "process.exit(1)",
+    );
   });
 
   it("reports error when spawn fails", async () => {
     mockSessionManager.spawn.mockRejectedValue(new Error("worktree creation failed"));
 
-    await expect(
-      program.parseAsync(["node", "test", "spawn", "my-app"]),
-    ).rejects.toThrow("process.exit(1)");
+    await expect(program.parseAsync(["node", "test", "spawn", "my-app"])).rejects.toThrow(
+      "process.exit(1)",
+    );
   });
 });
 
@@ -309,11 +310,14 @@ describe("spawn pre-flight checks", () => {
   it("fails with clear error when tmux is not installed (default runtime)", async () => {
     mockExec.mockRejectedValue(new Error("ENOENT"));
 
-    await expect(
-      program.parseAsync(["node", "test", "spawn", "my-app"]),
-    ).rejects.toThrow("process.exit(1)");
+    await expect(program.parseAsync(["node", "test", "spawn", "my-app"])).rejects.toThrow(
+      "process.exit(1)",
+    );
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => String(c[0])).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => String(c[0]))
+      .join("\n");
     expect(errors).toContain("tmux");
     // Should not attempt to spawn
     expect(mockSessionManager.spawn).not.toHaveBeenCalled();
@@ -354,7 +358,10 @@ describe("spawn pre-flight checks", () => {
   });
 
   it("checks gh auth when tracker is github", async () => {
-    const projects = (mockConfigRef.current as Record<string, unknown>).projects as Record<string, Record<string, unknown>>;
+    const projects = (mockConfigRef.current as Record<string, unknown>).projects as Record<
+      string,
+      Record<string, unknown>
+    >;
     projects["my-app"].tracker = { plugin: "github" };
 
     // tmux check passes, gh --version passes, gh auth status fails
@@ -363,11 +370,14 @@ describe("spawn pre-flight checks", () => {
       .mockResolvedValueOnce({ stdout: "gh version 2.40", stderr: "" }) // gh --version
       .mockRejectedValueOnce(new Error("not logged in")); // gh auth status
 
-    await expect(
-      program.parseAsync(["node", "test", "spawn", "my-app"]),
-    ).rejects.toThrow("process.exit(1)");
+    await expect(program.parseAsync(["node", "test", "spawn", "my-app"])).rejects.toThrow(
+      "process.exit(1)",
+    );
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => String(c[0])).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => String(c[0]))
+      .join("\n");
     expect(errors).toContain("not authenticated");
     expect(mockSessionManager.spawn).not.toHaveBeenCalled();
   });
@@ -390,7 +400,10 @@ describe("spawn pre-flight checks", () => {
     };
     mockSessionManager.spawn.mockResolvedValue(fakeSession);
 
-    const projects = (mockConfigRef.current as Record<string, unknown>).projects as Record<string, Record<string, unknown>>;
+    const projects = (mockConfigRef.current as Record<string, unknown>).projects as Record<
+      string,
+      Record<string, unknown>
+    >;
     projects["my-app"].tracker = { plugin: "linear" };
 
     // tmux check passes — gh should never be called
@@ -405,7 +418,10 @@ describe("spawn pre-flight checks", () => {
   });
 
   it("distinguishes gh not installed from gh not authenticated", async () => {
-    const projects = (mockConfigRef.current as Record<string, unknown>).projects as Record<string, Record<string, unknown>>;
+    const projects = (mockConfigRef.current as Record<string, unknown>).projects as Record<
+      string,
+      Record<string, unknown>
+    >;
     projects["my-app"].tracker = { plugin: "github" };
 
     // tmux passes, gh --version fails (not installed)
@@ -413,11 +429,14 @@ describe("spawn pre-flight checks", () => {
       .mockResolvedValueOnce({ stdout: "tmux 3.3a", stderr: "" }) // tmux -V
       .mockRejectedValueOnce(new Error("ENOENT")); // gh --version fails
 
-    await expect(
-      program.parseAsync(["node", "test", "spawn", "my-app"]),
-    ).rejects.toThrow("process.exit(1)");
+    await expect(program.parseAsync(["node", "test", "spawn", "my-app"])).rejects.toThrow(
+      "process.exit(1)",
+    );
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => String(c[0])).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => String(c[0]))
+      .join("\n");
     expect(errors).toContain("not installed");
     expect(errors).not.toContain("not authenticated");
   });

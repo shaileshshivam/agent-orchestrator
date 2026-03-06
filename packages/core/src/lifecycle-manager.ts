@@ -211,9 +211,7 @@ export function createLifecycleManager(deps: LifecycleManagerDeps): LifecycleMan
             "runtime",
             project.runtime ?? config.defaults.runtime,
           );
-          const terminalOutput = runtime
-            ? await runtime.getOutput(session.runtimeHandle, 10)
-            : "";
+          const terminalOutput = runtime ? await runtime.getOutput(session.runtimeHandle, 10) : "";
           if (terminalOutput) {
             const activity = agent.detectActivity(terminalOutput);
             if (activity === "waiting_input") return "needs_input";
@@ -237,7 +235,7 @@ export function createLifecycleManager(deps: LifecycleManagerDeps): LifecycleMan
     // 3. Auto-detect PR by branch if metadata.pr is missing.
     //    This is critical for agents without auto-hook systems (Codex, Aider,
     //    OpenCode) that can't reliably write pr=<url> to metadata on their own.
-    if (!session.pr && scm && session.branch) {
+    if (!session.pr && scm && session.branch && session.metadata["prAutoDetect"] !== "off") {
       try {
         const detectedPR = await scm.detectPR(session, project);
         if (detectedPR) {

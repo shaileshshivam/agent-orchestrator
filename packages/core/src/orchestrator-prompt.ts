@@ -56,6 +56,9 @@ ao session ls -p ${projectId}
 # Send message to a session
 ao send ${project.sessionPrefix}-1 "Your message here"
 
+# Claim an existing PR for a session
+ao session claim-pr 123 ${project.sessionPrefix}-1
+
 # Kill a session
 ao session kill ${project.sessionPrefix}-1
 
@@ -72,6 +75,7 @@ ao open ${projectId}
 | \`ao spawn <project> [issue]\` | Spawn a single worker agent session |
 | \`ao batch-spawn <project> <issues...>\` | Spawn multiple sessions in parallel |
 | \`ao session ls [-p project]\` | List all sessions (optionally filter by project) |
+| \`ao session claim-pr <pr> [session]\` | Attach an existing PR to a session |
 | \`ao session attach <session>\` | Attach to a session's tmux window |
 | \`ao session kill <session>\` | Kill a specific session |
 | \`ao session cleanup [-p project]\` | Kill completed/merged sessions |
@@ -106,6 +110,15 @@ Send instructions to a running agent:
 \`\`\`bash
 ao send ${project.sessionPrefix}-1 "Please address the review comments on your PR"
 \`\`\`
+
+### PR Takeover
+
+If a session needs to continue work on an existing PR:
+\`\`\`bash
+ao session claim-pr 123 ${project.sessionPrefix}-1
+\`\`\`
+
+This updates AO metadata, switches the worktree onto the PR branch, and lets lifecycle reactions keep routing CI and review feedback to that session.
 
 ### Cleanup
 

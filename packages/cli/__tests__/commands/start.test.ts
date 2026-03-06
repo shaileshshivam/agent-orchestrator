@@ -15,24 +15,30 @@ import type { SessionManager } from "@composio/ao-core";
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const { mockExec, mockExecSilent, mockConfigRef, mockSessionManager, mockWaitForPortAndOpen, mockSpawn } =
-  vi.hoisted(() => ({
-    mockExec: vi.fn(),
-    mockExecSilent: vi.fn(),
-    mockConfigRef: { current: null as Record<string, unknown> | null },
-    mockSessionManager: {
-      list: vi.fn(),
-      kill: vi.fn(),
-      cleanup: vi.fn(),
-      get: vi.fn(),
-      spawn: vi.fn(),
-      spawnOrchestrator: vi.fn(),
-      send: vi.fn(),
-    },
-    mockWaitForPortAndOpen: vi.fn().mockResolvedValue(undefined),
-    mockSpawn: vi.fn(),
-  }),
-);
+const {
+  mockExec,
+  mockExecSilent,
+  mockConfigRef,
+  mockSessionManager,
+  mockWaitForPortAndOpen,
+  mockSpawn,
+} = vi.hoisted(() => ({
+  mockExec: vi.fn(),
+  mockExecSilent: vi.fn(),
+  mockConfigRef: { current: null as Record<string, unknown> | null },
+  mockSessionManager: {
+    list: vi.fn(),
+    kill: vi.fn(),
+    cleanup: vi.fn(),
+    get: vi.fn(),
+    spawn: vi.fn(),
+    spawnOrchestrator: vi.fn(),
+    send: vi.fn(),
+    claimPR: vi.fn(),
+  },
+  mockWaitForPortAndOpen: vi.fn().mockResolvedValue(undefined),
+  mockSpawn: vi.fn(),
+}));
 
 vi.mock("../../src/lib/shell.js", () => ({
   tmux: vi.fn(),
@@ -191,10 +197,7 @@ function createFakeRepo(dir: string, remoteUrl: string, files?: Record<string, s
   mkdirSync(join(dir, ".git", "refs", "remotes", "origin"), { recursive: true });
   writeFileSync(join(dir, ".git", "HEAD"), "ref: refs/heads/main\n");
   writeFileSync(join(dir, ".git", "refs", "remotes", "origin", "main"), "abc\n");
-  writeFileSync(
-    join(dir, ".git", "config"),
-    `[remote "origin"]\n\turl = ${remoteUrl}\n`,
-  );
+  writeFileSync(join(dir, ".git", "config"), `[remote "origin"]\n\turl = ${remoteUrl}\n`);
   if (files) {
     for (const [name, content] of Object.entries(files)) {
       writeFileSync(join(dir, name), content);
@@ -212,7 +215,10 @@ describe("start command — project resolution", () => {
 
     await program.parseAsync(["node", "test", "start", "--no-dashboard", "--no-orchestrator"]);
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("My App");
     expect(output).toContain("Startup complete");
   });
@@ -232,7 +238,10 @@ describe("start command — project resolution", () => {
       "--no-orchestrator",
     ]);
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("Backend");
   });
 
@@ -250,7 +259,10 @@ describe("start command — project resolution", () => {
       ]),
     ).rejects.toThrow("process.exit(1)");
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => c.join(" ")).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(errors).toContain("not found");
   });
 
@@ -264,7 +276,10 @@ describe("start command — project resolution", () => {
       program.parseAsync(["node", "test", "start", "--no-dashboard", "--no-orchestrator"]),
     ).rejects.toThrow("process.exit(1)");
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => c.join(" ")).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(errors).toContain("Multiple projects");
   });
 
@@ -275,7 +290,10 @@ describe("start command — project resolution", () => {
       program.parseAsync(["node", "test", "start", "--no-dashboard", "--no-orchestrator"]),
     ).rejects.toThrow("process.exit(1)");
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => c.join(" ")).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(errors).toContain("No projects configured");
   });
 });
@@ -305,7 +323,10 @@ describe("start command — URL argument", () => {
     // Config should have been generated
     expect(existsSync(join(repoDir, "agent-orchestrator.yaml"))).toBe(true);
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("Reusing existing clone");
     expect(output).toContain("Startup complete");
   });
@@ -342,7 +363,10 @@ describe("start command — URL argument", () => {
       expect.anything(),
     );
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("Startup complete");
   });
 
@@ -389,7 +413,10 @@ describe("start command — URL argument", () => {
       expect.anything(),
     );
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("Startup complete");
   });
 
@@ -426,7 +453,10 @@ describe("start command — URL argument", () => {
       "--no-orchestrator",
     ]);
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("Using existing config");
     expect(output).toContain("Configured App");
   });
@@ -470,7 +500,10 @@ describe("start command — URL argument", () => {
       "--no-orchestrator",
     ]);
 
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     // Should pick "Multi Proj" by matching repo field, not error with "Multiple projects"
     expect(output).toContain("Multi Proj");
     expect(output).toContain("Startup complete");
@@ -491,7 +524,10 @@ describe("start command — URL argument", () => {
       ]),
     ).rejects.toThrow("process.exit(1)");
 
-    const errors = vi.mocked(console.error).mock.calls.map((c) => c.join(" ")).join("\n");
+    const errors = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(errors).toContain("Failed to clone");
   });
 });
@@ -549,7 +585,10 @@ describe("stop command", () => {
     await program.parseAsync(["node", "test", "stop"]);
 
     expect(mockSessionManager.kill).toHaveBeenCalledWith("app-orchestrator");
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("Orchestrator stopped");
   });
 
@@ -561,7 +600,10 @@ describe("stop command", () => {
     await program.parseAsync(["node", "test", "stop"]);
 
     expect(mockSessionManager.kill).not.toHaveBeenCalled();
-    const output = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => c.join(" "))
+      .join("\n");
     expect(output).toContain("is not running");
   });
 });
