@@ -495,7 +495,8 @@ export function registerStop(program: Command): void {
   program
     .command("stop [project]")
     .description("Stop orchestrator agent and dashboard for a project")
-    .action(async (projectArg?: string) => {
+    .option("--purge-session", "Also purge the mapped OpenCode session when stopping")
+    .action(async (projectArg?: string, opts?: { purgeSession?: boolean }) => {
       try {
         const config = loadConfig();
         const { projectId: _projectId, project } = resolveProject(config, projectArg);
@@ -510,7 +511,7 @@ export function registerStop(program: Command): void {
 
         if (existing) {
           const spinner = ora("Stopping orchestrator session").start();
-          await sm.kill(sessionId);
+          await sm.kill(sessionId, { purgeOpenCode: opts?.purgeSession === true });
           spinner.succeed("Orchestrator session stopped");
         } else {
           console.log(chalk.yellow(`Orchestrator session "${sessionId}" is not running`));
