@@ -371,6 +371,18 @@ describe("getLaunchCommand", () => {
     expect(cmd).toContain("isValidId(r.id)");
   });
 
+  it("primary capture validates session ID type and format", () => {
+    const cmd = agent.getLaunchCommand(makeLaunchConfig({ prompt: "test" }));
+    expect(cmd).toContain("isValidId=id=>typeof id===");
+    expect(cmd).toContain("isValidId(evt.session_id)");
+  });
+
+  it("fallback sort handles invalid date strings without NaN", () => {
+    const cmd = agent.getLaunchCommand(makeLaunchConfig({ prompt: "test" }));
+    expect(cmd).toContain("timestamp=v=>");
+    expect(cmd).toContain("Number.NEGATIVE_INFINITY");
+  });
+
   it("pipes JSON output into node instead of treating the session id as a command", () => {
     const cmd = agent.getLaunchCommand(makeLaunchConfig({ prompt: "Fix it" }));
     expect(cmd).toContain("| node -e");

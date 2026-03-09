@@ -103,11 +103,11 @@ function createOpenCodeAgent(): Agent {
           "node",
           "-e",
           shellEscape(
-            "let buf='';process.stdin.on('data',c=>buf+=c).on('end',()=>{const lines=buf.toString().split('\\n');for(const line of lines){if(!line.trim())continue;try{const evt=JSON.parse(line);if(evt.type==='step_start'&&evt.session_id){process.stdout.write(evt.session_id);process.exit(0);}}catch{}}process.exit(1);})",
+            "let buf='';process.stdin.on('data',c=>buf+=c).on('end',()=>{const lines=buf.toString().split('\\n');const isValidId=id=>typeof id==='string'&&/^ses_[A-Za-z0-9_-]+$/.test(id);for(const line of lines){if(!line.trim())continue;try{const evt=JSON.parse(line);if(evt.type==='step_start'&&isValidId(evt.session_id)){process.stdout.write(evt.session_id);process.exit(0);}}catch{}}process.exit(1);})",
           ),
         ].join(" ");
 
-        const fallbackSessionId = `opencode session list --format json | node -e ${shellEscape("let input='';process.stdin.on('data',c=>input+=c).on('end',()=>{const title=process.argv[1];let rows;try{rows=JSON.parse(input)}catch{process.exit(1)};if(!Array.isArray(rows))process.exit(1);const isValidId=id=>/^ses_[A-Za-z0-9_-]+$/.test(id);const matches=rows.filter(r=>r&&r.title===title&&typeof r.id==='string'&&isValidId(r.id)).sort((a,b)=>new Date(b.updated||0)-new Date(a.updated||0));if(matches.length===0)process.exit(1);process.stdout.write(matches[0].id);});")} ${shellEscape(`AO:${config.sessionId}`)}`;
+        const fallbackSessionId = `opencode session list --format json | node -e ${shellEscape("let input='';process.stdin.on('data',c=>input+=c).on('end',()=>{const title=process.argv[1];let rows;try{rows=JSON.parse(input)}catch{process.exit(1)};if(!Array.isArray(rows))process.exit(1);const isValidId=id=>/^ses_[A-Za-z0-9_-]+$/.test(id);const timestamp=v=>{if(typeof v==='number'&&Number.isFinite(v))return v;if(typeof v==='string'){const p=Date.parse(v);return Number.isNaN(p)?Number.NEGATIVE_INFINITY:p;}return Number.NEGATIVE_INFINITY;};const matches=rows.filter(r=>r&&r.title===title&&typeof r.id==='string'&&isValidId(r.id)).sort((a,b)=>timestamp(b.updated)-timestamp(a.updated));if(matches.length===0)process.exit(1);process.stdout.write(matches[0].id);});")} ${shellEscape(`AO:${config.sessionId}`)}`;
 
         const sessionIdCapture = `"$( { ${runCommand} | ${captureSessionId}; } || ${fallbackSessionId} )"`;
 
