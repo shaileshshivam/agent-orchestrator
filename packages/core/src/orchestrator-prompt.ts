@@ -48,7 +48,7 @@ ao status
 
 # Spawn sessions for issues (GitHub: #123, Linear: INT-1234, etc.)
 ao spawn ${projectId} INT-1234
-ao spawn ${projectId} --claim-pr 123 --takeover
+ao spawn ${projectId} --claim-pr 123
 ao batch-spawn ${projectId} INT-1 INT-2 INT-3
 
 # List sessions
