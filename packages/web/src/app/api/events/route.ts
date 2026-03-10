@@ -1,4 +1,4 @@
-import { getServices } from "@/lib/services";
+import { getServices, startBacklogPoller } from "@/lib/services";
 import { sessionToDashboard } from "@/lib/serialize";
 import { getAttentionLevel } from "@/lib/types";
 import { filterWorkerSessions } from "@/lib/project-utils";
@@ -22,6 +22,8 @@ export async function GET(request: Request): Promise<Response> {
     sessions: Session[],
     config: { projects: Record<string, { sessionPrefix?: string }> },
   ) => filterWorkerSessions(sessions, projectFilter, config.projects);
+
+  startBacklogPoller();
 
   const stream = new ReadableStream({
     start(controller) {
