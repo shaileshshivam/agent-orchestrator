@@ -182,12 +182,15 @@ function createOpenCodeAgent(): Agent {
           ? ["opencode", "run", ...runOptions, promptValue].join(" ")
           : ["opencode", "run", ...runOptions, "--command", "true"].join(" ");
         const options = sharedOptions.length > 0 ? ` ${sharedOptions.join(" ")}` : "";
+        const missingSessionError = shellEscape(
+          `failed to discover OpenCode session ID for AO:${config.sessionId}`,
+        );
         return [
           `SES_ID=$(${runCommand} | node -e ${shellEscape(captureScript)})`,
           `if [ -z "$SES_ID" ]; then`,
           `  SES_ID=$(opencode session list --format json | node -e ${shellEscape(fallbackScript)} ${shellEscape(`AO:${config.sessionId}`)})`,
           "fi",
-          `[ -n "$SES_ID" ] && exec opencode --session "$SES_ID"${options}; echo "failed to discover OpenCode session ID for AO:${config.sessionId}" >&2; exit 1`,
+          `[ -n "$SES_ID" ] && exec opencode --session "$SES_ID"${options}; echo ${missingSessionError} >&2; exit 1`,
         ].join("; ");
       }
 

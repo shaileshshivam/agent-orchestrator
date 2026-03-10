@@ -173,6 +173,14 @@ describe("getLaunchCommand", () => {
     expect(cmd).toContain("--model 'claude-sonnet-4-5-20250929");
   });
 
+  it("shell-escapes sessionId in the discovery failure message", () => {
+    const cmd = agent.getLaunchCommand(makeLaunchConfig({ sessionId: "sess-1; rm -rf /" }));
+
+    expect(cmd).toContain(
+      "echo 'failed to discover OpenCode session ID for AO:sess-1; rm -rf /' >&2",
+    );
+  });
+
   it("works with different agent names: oracle", () => {
     const cmd = agent.getLaunchCommand(
       makeLaunchConfig({ subagent: "oracle", prompt: "review code" }),
