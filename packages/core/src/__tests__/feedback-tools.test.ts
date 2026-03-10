@@ -104,6 +104,19 @@ describe("feedback dedupe key", () => {
     expect(keyA).toBe(keyB);
   });
 
+  it("is stable when case-only evidence changes alter default sort order", () => {
+    const keyA = generateFeedbackDedupeKey(FEEDBACK_TOOL_NAMES.BUG_REPORT, {
+      ...validPayload,
+      evidence: ["BETA", "alpha"],
+    });
+    const keyB = generateFeedbackDedupeKey(FEEDBACK_TOOL_NAMES.BUG_REPORT, {
+      ...validPayload,
+      evidence: ["beta", "alpha"],
+    });
+
+    expect(keyA).toBe(keyB);
+  });
+
   it("changes when normalized content differs", () => {
     const keyA = generateFeedbackDedupeKey(FEEDBACK_TOOL_NAMES.BUG_REPORT, validPayload);
     const keyB = generateFeedbackDedupeKey(FEEDBACK_TOOL_NAMES.BUG_REPORT, {

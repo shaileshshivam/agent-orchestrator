@@ -81,7 +81,9 @@ export function generateFeedbackDedupeKey(
   tool: FeedbackToolName,
   input: FeedbackToolInput,
 ): string {
-  const canonicalEvidence = [...input.evidence].map(normalizeText).sort();
+  const canonicalEvidence = [...input.evidence]
+    .map((item) => normalizeText(item).toLowerCase())
+    .sort();
   const canonical = [
     tool,
     normalizeText(input.title).toLowerCase(),
@@ -89,7 +91,7 @@ export function generateFeedbackDedupeKey(
     normalizeText(input.session).toLowerCase(),
     normalizeText(input.source).toLowerCase(),
     input.confidence.toFixed(4),
-    ...canonicalEvidence.map((item) => item.toLowerCase()),
+    ...canonicalEvidence,
   ].join("|");
 
   return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
@@ -209,13 +211,11 @@ export class FeedbackReportStore {
     for (const name of readdirSync(this.reportsDir)) {
       if (!isReportFileName(name)) continue;
       const reportPath = join(this.reportsDir, name);
-      let isFile = false;
       try {
-        isFile = statSync(reportPath).isFile();
+        if (!statSync(reportPath).isFile()) continue;
       } catch {
-        isFile = false;
+        continue;
       }
-      if (!isFile) continue;
 
       const content = readFileSync(reportPath, "utf-8");
       const parsed = parseReportFile(content);
