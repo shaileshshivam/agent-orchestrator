@@ -20,11 +20,10 @@ import {
   type PluginRegistry,
 } from "@composio/ao-core";
 import {
-  isPRRateLimited,
   type DashboardSession,
   type DashboardPR,
   type DashboardStats,
-} from "./types";
+} from "./types.js";
 import {
   TTLCache,
   prCache,
@@ -149,7 +148,11 @@ export async function enrichSessionPR(
     dashboard.pr.mergeability = cached.mergeability;
     dashboard.pr.unresolvedThreads = cached.unresolvedThreads;
     dashboard.pr.unresolvedComments = cached.unresolvedComments;
-    maybeWriteSessionStatusTransition(dashboard, opts?.metadata, isPRRateLimited(dashboard.pr));
+    maybeWriteSessionStatusTransition(
+      dashboard,
+      opts?.metadata,
+      dashboard.pr.mergeability.blockers.includes("API rate limited or unavailable"),
+    );
     return true;
   }
 

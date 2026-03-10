@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       const scm = getSCM(registry, project);
       if (!scm) return Promise.resolve();
       if (!project) return Promise.resolve();
-      const sessionsDir = resolveSessionsDir(config.configPath, project.path, core.metadata);
+      const sessionsDir = resolveSessionsDir(config.configPath, project.path);
       return enrichSessionPR(dashboardSessions[i], scm, core.pr, {
         metadata: sessionsDir
           ? {

@@ -28,11 +28,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const project = resolveProject(coreSession, config.projects);
       const scm = getSCM(registry, project);
       if (scm && project) {
-        const sessionsDir = resolveSessionsDir(
-          config.configPath,
-          project.path,
-          coreSession.metadata,
-        );
+        const sessionsDir = resolveSessionsDir(config.configPath, project.path);
         await enrichSessionPR(dashboardSession, scm, coreSession.pr, {
           bypassCache: true,
           metadata: sessionsDir
