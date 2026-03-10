@@ -31,7 +31,7 @@ import {
   PR_CACHE_TTL_SUCCESS_MS,
   PR_CACHE_TTL_RATE_LIMIT_MS,
   type PREnrichmentData,
-} from "./cache.js";
+} from "./cache";
 
 /** Cache for issue titles (5 min TTL — issue titles rarely change) */
 const issueTitleCache = new TTLCache<string>(300_000);
