@@ -1,86 +1,183 @@
-# Feedback Routing and Follow-up Design (Post-PR #403)
+# Feedback Routing and Follow-up Design (Formalized Pipeline v2)
 
 ## Status
-This document captures the architecture and delivery plan agreed after PR #403 discussions.
 
-- Current PR (#403 / issue #399) remains scoped to structured feedback tools + validation + dedupe + persistence.
-- Follow-up work adds configurable routing to SCM, issue/PR/fork decisioning, and orchestrator execution behavior.
+This is a design formalization update after PR #403 discussion.
 
-## Goals
-1. Support configurable feedback destination per project.
-2. Decide deterministically whether to:
-   - file issue only,
-   - file issue + PR reference,
-   - file issue + fork reference.
-3. Keep execution reliable, idempotent, and auditable.
-4. Keep architecture pluggable for GitHub and GitLab.
+- PR #403 remains implementation-scoped to feedback contracts/validation/storage.
+- This document defines the next-step architecture for report -> issue -> agent-session -> PR.
+- This update is design-only (no new runtime behavior introduced by this document itself).
 
-## Explicit Decisions
-1. **Routing mode is exclusive**: `local` OR `scm` (no `both`).
-2. **Privacy guardrails are deferred** to a dedicated follow-up PR.
-3. **Decision intelligence can be agent-assisted**, but all side effects are executed by deterministic orchestrator code.
-4. **No hidden dual persistence in `scm` mode**. Only minimal publish journal metadata is stored for retries/idempotency.
+## Scope and Decisions
 
-## Non-Goals (for this follow-up)
-1. Full privacy/redaction engine.
-2. Generic "spawn arbitrary subagents for every decision" pattern.
-3. Replacing existing lifecycle architecture.
+1. Feedback routing mode is exclusive: `local` OR `scm` (never both).
+2. Privacy guardrails are intentionally deferred to a dedicated follow-up PR.
+3. Side effects stay deterministic in orchestrator control code.
+4. Optional subagent/skill can recommend decisions, but cannot execute SCM mutations.
 
-## High-Level Flow
-1. A report is captured (`bug_report` or `improvement_suggestion`).
-2. Orchestrator resolves routing mode:
-   - `local`: persist locally and stop.
-   - `scm`: publish via provider adapter.
-3. In `scm` mode, orchestrator decides outcome based on policy + context:
-   - issue only,
-   - issue + PR reference,
-   - issue + fork reference.
-4. Orchestrator updates publish journal with status and links.
+## Formal Pipeline
 
-## Decision Model (Simple Rules)
-Primary intent signal:
-- `self_blocking_now = true`: user needs this now; escalate to actionable path.
-- `self_blocking_now = false`: report only.
+1. **Report capture**: validate feedback tool payload and compute dedupe key.
+2. **Issue resolution**: find existing issue by markers; create or comment/update.
+3. **Follow-up planning**: decide issue-only vs issue+PR vs issue+fork from policy + context.
+4. **Execution**:
+   - direct SCM action path (issue/fork/PR metadata operations), or
+   - agent-session path (spawn session to produce code changes).
+5. **Linking and journal update**: persist outcome state and references.
 
-Operational decisions:
-1. If not self-blocking -> issue only.
-2. If self-blocking and branch/commits are ready in upstream -> issue + PR reference.
-3. If self-blocking and upstream write unavailable -> issue + fork reference (and PR-from-fork reference if available).
+## 1) Trigger Conditions
 
-## Orchestrator vs Subagent Responsibilities
-### Deterministic orchestrator control plane (required)
-Responsible for:
-1. Find existing issue by `dedupeKey` marker.
-2. Decide create vs comment.
-3. Resolve repo target (upstream/fork) from policy + context.
-4. Ensure fork if needed.
-5. Create/update issue and PR references.
-6. Retry/idempotency/journal updates.
+The pipeline is triggered when all of the following are true:
 
-### Ephemeral subagent skill (optional)
-Responsible for recommendation only:
-1. classify urgency (`self_blocking_now`),
-2. suggest action (`issue_only`, `issue_and_pr`, `issue_and_fork`),
-3. emit strict JSON decision object.
+1. A valid `bug_report` or `improvement_suggestion` is captured.
+2. Routing mode is `scm` for the active project.
+3. Confidence threshold is met for that report type.
+4. Governance policy allows target/fork mutation for this actor/project.
 
-Constraint:
-- Subagent does not call SCM side-effect APIs directly.
-- Orchestrator executes all side effects.
+Decision triggers for follow-up action:
+
+1. `self_blocking_now = false` -> issue-only.
+2. `self_blocking_now = true` + ready branch/commits -> issue + PR link/create path.
+3. `self_blocking_now = true` + no writable upstream path -> issue + fork path.
+4. `self_blocking_now = true` + no code yet -> spawn agent-session path.
+
+## 2) Session Spawning Contract
+
+When follow-up requires code (not just metadata operations), orchestrator spawns a worker session.
+
+### Inputs
+
+1. `reportId`, `dedupeKey`, `issueUrl` (resolved in prior stage).
+2. `targetRepo` and `targetBranchPolicy`.
+3. `followUpIntent` (`fix_now`, `draft_solution`, etc.).
+4. Optional `forkContext` (fork owner/repo/branch if fork path selected).
+
+### Preconditions
+
+1. Issue is already resolved/created and has stable URL.
+2. Spawn policy permits automatic coding session for this project.
+3. Repo target has been selected (upstream or fork).
+
+### Required outputs
+
+1. Session ID.
+2. Branch reference used by the session.
+3. Optional PR URL if created by orchestrator or agent flow.
+4. Terminal state recorded in publish journal (`done`, `failed`, `cancelled`).
+
+## 3) Target Selection (Upstream vs Fork)
+
+Target selection is deterministic and policy-driven:
+
+1. If upstream write is allowed and policy is `upstream`, target upstream.
+2. If upstream write is blocked and policy allows fork, target fork.
+3. If fork exists and policy says reuse, reuse existing fork.
+4. If fork missing and policy allows creation, create fork and continue.
+5. If neither upstream nor fork is allowed, downgrade to issue-only and mark follow-up blocked.
+
+Example policy knobs:
+
+```yaml
+feedback:
+  mode: scm
+  scm:
+    provider: github
+    targetRepo: auto # auto | upstream | fork
+    forkStrategy: upstream # upstream | fork | skip
+```
+
+## 4) PR Creation/Linking Requirements
+
+For any PR action, orchestrator enforces:
+
+1. Issue URL exists and is referenced in PR body.
+2. Dedupe marker is present in issue/PR metadata for traceability.
+3. If PR already exists for dedupe key + branch, link existing PR rather than creating duplicate.
+4. If fork path is used, PR must include fork repo/branch references.
+5. Issue must be updated with final PR URL and state transitions.
+
+Canonical markers in issue/PR body:
+
+1. `<!-- ao:feedback-tool:<tool> -->`
+2. `<!-- ao:dedupe-key:<dedupeKey> -->`
+3. `<!-- ao:session:<sessionId> -->` (if session spawned)
+
+## 5) Idempotency and Retry Semantics
+
+Idempotency keys:
+
+1. `dedupeKey` for issue-level identity.
+2. `operationKey` for each side effect (create issue, create fork, create PR, add comment).
+
+Retry semantics:
+
+1. Retry only retryable transport/server failures.
+2. Exponential backoff with bounded attempts.
+3. Non-retryable errors transition to terminal failure with actionable reason.
+
+At-least-once safety:
+
+1. Replays must first check existing issue/fork/PR using markers before creating anything.
+2. Side effects must be written as "find-or-create" operations.
+
+Journal semantics:
+
+1. Minimal journal record per report in `scm` mode:
+   - `dedupeKey`, `stage`, `status`, `issueUrl`, `prUrl`, `targetRepo`, `lastError`.
+2. Journal drives recovery and prevents duplicate creation on restart.
+
+## 6) Governance Hooks Per Fork Owner Policy
+
+Governance is evaluated before each mutating operation.
+
+Policy hooks:
+
+1. `canCreateIssue(project, actor, targetRepo)`
+2. `canCreateFork(project, actor, forkOwner)`
+3. `canCreatePR(project, actor, targetRepo, sourceRepo)`
+4. `canSpawnSession(project, actor, followUpIntent)`
+
+Per-fork-owner controls:
+
+1. Allowed fork owner list / deny list.
+2. Require human approval for fork creation under selected owners.
+3. Optional restriction to pre-registered fork remotes.
+
+If governance denies an operation:
+
+1. Do not attempt mutation.
+2. Downgrade path if possible (e.g., issue-only).
+3. Record explicit denial reason in journal.
+
+## Responsibilities: Orchestrator vs Subagent Skill
+
+### Orchestrator (required)
+
+1. Owns all SCM side effects.
+2. Owns retries, idempotency checks, and journal updates.
+3. Enforces governance hooks and policy fallbacks.
+
+### Optional ephemeral subagent skill
+
+1. Produces recommendation payload only:
+   - `self_blocking_now`
+   - `recommended_action`
+   - `reason`
+   - `confidence`
+2. Must return strict JSON schema.
+3. If invalid/low confidence, orchestrator falls back to deterministic rules.
 
 ## Proposed Components
-1. `FeedbackRouter`
-   - Chooses `local` vs `scm` path.
-2. `FeedbackDecisionEngine`
-   - Policy-driven deterministic decision logic.
-   - Optional subagent recommendation input.
-3. `FeedbackPublisher`
-   - Provider-specific issue publishing (`github`, `gitlab`).
-4. `ForkManager`
-   - Detect/ensure fork context when required.
-5. `FeedbackPublishJournal`
-   - Minimal metadata: `dedupeKey`, `status`, issue URL, PR URL, target repo, last error.
 
-## Config Proposal
+1. `FeedbackRouter`: local vs scm dispatch.
+2. `IssueResolver`: dedupe-aware issue create/update/comment.
+3. `FollowUpPlanner`: issue-only vs issue+PR vs issue+fork decision.
+4. `TargetResolver`: upstream/fork target determination.
+5. `FollowUpExecutor`: direct SCM or agent-session execution path.
+6. `FeedbackPublishJournal`: status, links, retries, recovery metadata.
+
+## Config Proposal (Extended)
+
 ```yaml
 feedback:
   mode: scm # local | scm
@@ -92,63 +189,44 @@ feedback:
     minConfidence:
       bug_report: 0.6
       improvement_suggestion: 0.75
-  decision:
-    useSubagentSkill: true
-    fallback: deterministic
+  followUp:
+    enableAgentSession: true
+    requireIssueBeforeSession: true
+  governance:
+    allowedForkOwners: ["<org-or-user>"]
+    requireApprovalForForkCreation: false
 ```
 
-## Data Contracts
-In SCM issue body/footer, include stable markers:
-- `<!-- ao:feedback-tool:bug_report -->`
-- `<!-- ao:dedupe-key:<value> -->`
-- `<!-- ao:session:<session-id> -->`
-
-These markers power idempotent update/comment behavior.
-
-## Delivery Plan
-### Phase 1 (already in PR #403)
-1. Tool contracts and strict schema validation.
-2. Dedupe key generation.
-3. Structured persistence.
-
-### Phase 2 (new PR)
-1. Add feedback routing config (`local` or `scm`).
-2. Implement `FeedbackRouter` and `FeedbackPublisher` interface.
-3. Implement GitHub publisher (issue create/update via dedupe markers).
-4. Add publish journal.
-
-### Phase 3 (new PR)
-1. Add fork-aware decision execution.
-2. Add optional subagent decision skill integration.
-3. Add GitLab publisher parity.
-4. Add end-to-end tests for issue-only vs issue+PR vs issue+fork.
-
 ## Testing Strategy
+
 ### Unit tests
-1. config schema and defaults,
-2. decision matrix behavior,
-3. dedupe marker generation and issue matching,
-4. fallback behavior when subagent output is invalid.
+
+1. Trigger matrix and planner decision table.
+2. Target resolver behavior for upstream/fork permutations.
+3. Marker generation and dedupe matching.
+4. Governance hook allow/deny behavior.
+5. Retry classifier and idempotent replay logic.
 
 ### Integration tests
-1. GitHub issue create/update path,
-2. fork ensure and reference logic,
-3. publish journal retry/idempotency.
+
+1. Issue create/update on GitHub and GitLab.
+2. Fork ensure/reuse path under different policies.
+3. PR create/link and issue back-link updates.
+4. Agent-session contract handoff and journal transitions.
 
 ### End-to-end tests
-1. self-blocking false -> issue only,
-2. self-blocking true + upstream writable -> issue + PR ref,
-3. self-blocking true + no upstream write -> issue + fork ref.
 
-## Failure Handling
-1. SCM API failure -> retain journal entry with retry metadata.
-2. Duplicate publish attempts -> matched by dedupe marker; update existing issue instead of creating new one.
-3. Invalid subagent decision -> ignore and use deterministic policy engine.
+1. report -> issue-only path.
+2. report -> issue -> session -> PR path.
+3. report -> issue -> fork -> session -> PR-from-fork path.
 
 ## Rollout
-1. Ship disabled by default (`mode: local`).
-2. Enable per project via explicit config.
-3. Observe logs and publish outcomes before broader rollout.
+
+1. Ship with `mode: local` default and `scm` opt-in.
+2. Enable on a small set of projects first.
+3. Track duplicate suppression rate, retry outcomes, and failure classes.
+4. Expand once deterministic behavior and governance policy outcomes are stable.
 
 ## Summary
-The orchestrator remains the source of reliable execution. Optional subagent skill can improve decision quality, but never owns side effects. Routing remains exclusive (`local` or `scm`) to avoid conflicting sources of truth.
+
+The formal pipeline is now explicit: report -> issue -> (optional) agent-session -> PR, with fork-aware execution and governance hooks. Orchestrator remains the only executor of side effects; agentic skill remains advisory.
