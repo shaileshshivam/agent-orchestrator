@@ -56,7 +56,10 @@ export async function runRecovery(options: RecoveryManagerOptions): Promise<Reco
     assessments.push(assessment);
 
     if (dryRun) {
-      switch (assessment.action) {
+      const dryRunResult = await executeAction(assessment, config, registry, context);
+      results.push(dryRunResult);
+
+      switch (dryRunResult.action) {
         case "recover":
           report.recovered.push(assessment.sessionId);
           break;
