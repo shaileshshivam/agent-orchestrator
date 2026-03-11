@@ -193,7 +193,7 @@ function getNextSessionNumber(existingSessions: string[], prefix: string): numbe
 }
 
 function getSessionNumber(sessionId: string, prefix: string): number | undefined {
-  const match = sessionId.match(new RegExp(`^${escapeRegex(prefix)}-(\d+)$`));
+  const match = sessionId.match(new RegExp(`^${escapeRegex(prefix)}-(\\d+)$`));
   if (!match) return undefined;
 
   const parsed = Number.parseInt(match[1], 10);
