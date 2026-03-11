@@ -15,8 +15,22 @@ import { getPrimaryProjectId, getProjectName, getAllProjects } from "@/lib/proje
 import { filterWorkerSessions, findOrchestratorSessionId } from "@/lib/project-utils";
 import { resolveGlobalPause, type GlobalPauseState } from "@/lib/global-pause";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const projectName = getProjectName();
+function getSelectedProjectName(projectFilter: string | undefined): string {
+  if (projectFilter === "all") return "All Projects";
+  const projects = getAllProjects();
+  if (projectFilter) {
+    const selectedProject = projects.find((project) => project.id === projectFilter);
+    if (selectedProject) return selectedProject.name;
+  }
+  return getProjectName();
+}
+
+export async function generateMetadata(props: {
+  searchParams: Promise<{ project?: string }>;
+}): Promise<Metadata> {
+  const searchParams = await props.searchParams;
+  const projectFilter = searchParams.project ?? getPrimaryProjectId();
+  const projectName = getSelectedProjectName(projectFilter);
   return { title: { absolute: `ao | ${projectName}` } };
 }
 
@@ -97,7 +111,7 @@ export default async function Home(props: { searchParams: Promise<{ project?: st
     globalPause = null;
   }
 
-  const projectName = getProjectName();
+  const projectName = getSelectedProjectName(projectFilter);
   const projects = getAllProjects();
   const selectedProjectId = projectFilter === "all" ? undefined : projectFilter;
 
