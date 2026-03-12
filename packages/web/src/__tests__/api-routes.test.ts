@@ -708,13 +708,15 @@ describe("API Routes", () => {
 
   describe("GET /api/events", () => {
     it("returns SSE content type", async () => {
-      const res = await eventsGET();
+      const req = makeRequest("/api/events", { method: "GET" });
+      const res = await eventsGET(req);
       expect(res.headers.get("Content-Type")).toBe("text/event-stream");
       expect(res.headers.get("Cache-Control")).toBe("no-cache");
     });
 
     it("streams initial snapshot event", async () => {
-      const res = await eventsGET();
+      const req = makeRequest("/api/events", { method: "GET" });
+      const res = await eventsGET(req);
       const reader = res.body!.getReader();
       const { value } = await reader.read();
       reader.cancel();

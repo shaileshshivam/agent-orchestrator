@@ -17,10 +17,9 @@ export const dynamic = "force-dynamic";
  * Polls SessionManager.list() on an interval (no SSE push from core yet).
  */
 export async function GET(request: Request): Promise<Response> {
-  const effectiveRequest = request ?? new Request("http://localhost/api/events");
   const encoder = new TextEncoder();
   const correlationId = createCorrelationId("sse");
-  const { searchParams } = new URL(effectiveRequest.url);
+  const { searchParams } = new URL(request.url);
   const projectFilter = searchParams.get("project");
   type ServicesConfig = Awaited<ReturnType<typeof getServices>>["config"];
   let heartbeat: ReturnType<typeof setInterval> | undefined;
