@@ -18,6 +18,7 @@ import { DynamicFavicon } from "./DynamicFavicon";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { ProjectSidebar } from "./ProjectSidebar";
 import type { ProjectInfo } from "@/lib/project-name";
+import { apiPath } from "@/lib/api-path";
 
 interface DashboardProps {
   initialSessions: DashboardSession[];
@@ -139,7 +140,7 @@ export function Dashboard({
   }, [activeOrchestrators, allProjectsView, projects, sessionsByProject]);
 
   const handleSend = useCallback(async (sessionId: string, message: string) => {
-    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/send`, {
+    const res = await fetch(apiPath(`/api/sessions/${encodeURIComponent(sessionId)}/send`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
@@ -151,7 +152,7 @@ export function Dashboard({
 
   const handleKill = useCallback(async (sessionId: string) => {
     if (!confirm(`Kill session ${sessionId}?`)) return;
-    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/kill`, {
+    const res = await fetch(apiPath(`/api/sessions/${encodeURIComponent(sessionId)}/kill`), {
       method: "POST",
     });
     if (!res.ok) {
@@ -160,7 +161,7 @@ export function Dashboard({
   }, []);
 
   const handleMerge = useCallback(async (prNumber: number) => {
-    const res = await fetch(`/api/prs/${prNumber}/merge`, { method: "POST" });
+    const res = await fetch(apiPath(`/api/prs/${prNumber}/merge`), { method: "POST" });
     if (!res.ok) {
       console.error(`Failed to merge PR #${prNumber}:`, await res.text());
     }
@@ -168,7 +169,7 @@ export function Dashboard({
 
   const handleRestore = useCallback(async (sessionId: string) => {
     if (!confirm(`Restore session ${sessionId}?`)) return;
-    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/restore`, {
+    const res = await fetch(apiPath(`/api/sessions/${encodeURIComponent(sessionId)}/restore`), {
       method: "POST",
     });
     if (!res.ok) {
@@ -183,7 +184,7 @@ export function Dashboard({
     setSpawnErrors(({ [project.id]: _ignored, ...current }) => current);
 
     try {
-      const res = await fetch("/api/orchestrators", {
+      const res = await fetch(apiPath("/api/orchestrators"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id }),
