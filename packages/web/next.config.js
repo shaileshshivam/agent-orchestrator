@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 import { normalizeBasePath } from "./src/lib/base-path.js";
 
-export { normalizeBasePath };
-
 const normalizedBasePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH ?? "");
 
 const nextConfig = {

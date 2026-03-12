@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeBasePath } from "../../../next.config.js";
+import { normalizeBasePath } from "../base-path.js";
 
 describe("normalizeBasePath", () => {
   it("returns an empty string for empty input", () => {
