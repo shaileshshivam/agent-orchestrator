@@ -12,6 +12,7 @@ import {
 } from "@composio/ao-core";
 import * as serialize from "@/lib/serialize";
 import { getSCM } from "@/lib/services";
+import { getTerminalTransportHealth } from "@/lib/terminal-transport";
 import type { TerminalTransportHealth } from "@/lib/types";
 
 const mockTerminalHealth: TerminalTransportHealth = {
@@ -448,6 +449,47 @@ describe("API Routes", () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data).toEqual(mockTerminalHealth);
+    });
+
+    it("rate-limits self-heal side effects across frequent polls", async () => {
+      const degradedHealth: TerminalTransportHealth = {
+        ...mockTerminalHealth,
+        status: "degraded",
+        degraded: true,
+        message: "Terminal transport degraded: direct terminal websocket",
+        services: {
+          ...mockTerminalHealth.services,
+          directTerminalWebsocket: {
+            ...mockTerminalHealth.services.directTerminalWebsocket,
+            healthy: false,
+            status: "restarting",
+          },
+        },
+      };
+
+      const healthMock = vi.mocked(getTerminalTransportHealth);
+      healthMock.mockReset();
+      healthMock.mockResolvedValueOnce(degradedHealth);
+      healthMock.mockResolvedValueOnce(degradedHealth);
+      healthMock.mockResolvedValueOnce(degradedHealth);
+
+      const nowSpy = vi.spyOn(Date, "now");
+      const base = 10_000_000_000_000;
+      nowSpy.mockReturnValueOnce(base);
+      const first = await terminalHealthGET(
+        makeRequest("http://localhost:3000/api/terminal-health"),
+      );
+      expect(first.status).toBe(200);
+
+      nowSpy.mockReturnValueOnce(base + 10);
+      const second = await terminalHealthGET(
+        makeRequest("http://localhost:3000/api/terminal-health"),
+      );
+      expect(second.status).toBe(200);
+
+      expect(healthMock).toHaveBeenNthCalledWith(1, { heal: false });
+      expect(healthMock).toHaveBeenNthCalledWith(2, { heal: true });
+      expect(healthMock).toHaveBeenNthCalledWith(3, { heal: false });
     });
   });
 

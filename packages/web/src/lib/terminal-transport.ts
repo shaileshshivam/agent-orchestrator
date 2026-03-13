@@ -206,7 +206,12 @@ function scheduleRestart(definition: TerminalTransportServiceDefinition): void {
   service.status = "restarting";
   service.restartTimer = setTimeout(() => {
     service.restartTimer = null;
-    void ensureServiceHealthy(definition.key, true);
+    void ensureServiceHealthy(definition.key, true).catch((error) => {
+      service.status = "degraded";
+      service.lastErrorAt = nowIso();
+      service.lastError = error instanceof Error ? error.message : String(error);
+      scheduleRestart(definition);
+    });
   }, service.restartDelayMs);
   service.restartDelayMs = Math.min(
     MAX_RESTART_DELAY_MS,
