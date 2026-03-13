@@ -62,7 +62,7 @@ describe("Dashboard terminal transport banner", () => {
   it("shows a degraded terminal banner when websocket services are unavailable", () => {
     render(<Dashboard initialSessions={[makeSession()]} initialTerminalHealth={degradedHealth} />);
 
-    expect(screen.getAllByText(/Terminal transport degraded:/)).toHaveLength(2);
+    expect(screen.getAllByText(/Terminal transport degraded:/)).toHaveLength(1);
     expect(
       screen.getByText(/dashboard sessions stay visible while websocket services restart/i),
     ).toBeInTheDocument();

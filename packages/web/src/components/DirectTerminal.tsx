@@ -561,21 +561,25 @@ export function DirectTerminal({
         : "bg-[var(--color-status-attention)] animate-[pulse_1.5s_ease-in-out_infinite]";
 
   const degradedTransportMessage =
-    status !== "connected" && terminalHealth?.services.directTerminalWebsocket.healthy === false
+    terminalHealth?.services.directTerminalWebsocket.healthy === false
       ? terminalHealth.services.directTerminalWebsocket.message
       : null;
 
   const statusText =
-    status === "connected" && !degradedTransportMessage
+    degradedTransportMessage ??
+    (status === "connected"
       ? "Connected"
-      : (degradedTransportMessage ?? (status === "error" ? (error ?? "Error") : "Connecting…"));
+      : status === "error"
+        ? (error ?? "Error")
+        : "Connecting…");
 
-  const statusTextColor =
-    status === "connected" && !degradedTransportMessage
+  const statusTextColor = degradedTransportMessage
+    ? "text-[var(--color-status-attention)]"
+    : status === "connected"
       ? "text-[var(--color-status-ready)]"
-      : status === "error" && !degradedTransportMessage
+      : status === "error"
         ? "text-[var(--color-status-error)]"
-        : "text-[var(--color-status-attention)]";
+        : "text-[var(--color-text-tertiary)]";
 
   return (
     <div

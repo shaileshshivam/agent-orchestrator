@@ -232,6 +232,14 @@ export function Dashboard({
     return new Date(globalPause.pausedUntil).toLocaleString();
   }, [globalPause]);
 
+  const terminalHealthBannerMessage = useMemo(() => {
+    if (!terminalHealth?.degraded) {
+      return null;
+    }
+
+    return terminalHealth.message.replace(/^Terminal transport degraded:\s*/i, "");
+  }, [terminalHealth]);
+
   useEffect(() => {
     setGlobalPauseDismissed(false);
   }, [globalPause?.pausedUntil, globalPause?.reason, globalPause?.sourceSessionId]);
@@ -290,7 +298,7 @@ export function Dashboard({
           </div>
         )}
 
-        {terminalHealth?.degraded && (
+        {terminalHealthBannerMessage && (
           <div className="mb-6 flex items-center gap-2.5 rounded border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.05)] px-3.5 py-2.5 text-[11px] text-[var(--color-status-attention)]">
             <svg
               className="h-3.5 w-3.5 shrink-0"
@@ -303,7 +311,7 @@ export function Dashboard({
               <path d="M12 8v4M12 16h.01" />
             </svg>
             <span className="flex-1">
-              <strong>Terminal transport degraded:</strong> {terminalHealth.message}. Dashboard
+              <strong>Terminal transport degraded:</strong> {terminalHealthBannerMessage}. Dashboard
               sessions stay visible while websocket services restart.
             </span>
           </div>
