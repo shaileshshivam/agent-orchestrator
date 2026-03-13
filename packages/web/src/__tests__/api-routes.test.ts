@@ -873,6 +873,108 @@ describe("API Routes", () => {
       const data = await res.json();
       expect(data.error).toMatch(/resolutionType must be one of/);
     });
+
+    it("POST verify fails closed when SCM lacks full review thread snapshots", async () => {
+      const createReq = makeRequest("/api/prs/432/review-resolutions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          threadId: "thread-missing-snapshots-verify",
+          resolutionType: "not_actionable",
+          rationale: "Handled via external dependency limitations",
+        }),
+      });
+      const createRes = await reviewResolutionsPOST(createReq, {
+        params: Promise.resolve({ id: "432" }),
+      });
+      expect(createRes.status).toBe(201);
+
+      const original = mockSCM.getReviewThreadSnapshots;
+      mockSCM.getReviewThreadSnapshots = undefined as unknown as ReturnType<typeof vi.fn>;
+
+      const verifyReq = makeRequest("/api/prs/432/review-resolutions/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: "thread-missing-snapshots-verify" }),
+      });
+      const verifyRes = await reviewVerifyPOST(verifyReq, {
+        params: Promise.resolve({ id: "432" }),
+      });
+
+      expect(verifyRes.status).toBe(422);
+      const data = await verifyRes.json();
+      expect(data.error).toMatch(/full review thread snapshots/);
+      expect(
+        data.blockers.some((b: { code: string }) => b.code === "THREAD_SNAPSHOTS_UNAVAILABLE"),
+      ).toBe(true);
+
+      mockSCM.getReviewThreadSnapshots = original;
+    });
+
+    it("POST apply fails closed when SCM lacks full review thread snapshots", async () => {
+      (mockSCM.getReviewThreadSnapshots as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        {
+          prNumber: 432,
+          threadId: "thread-missing-snapshots-apply",
+          source: "human",
+          bodyHash: "hash",
+          severity: "medium",
+          status: "resolved",
+          capturedAt: new Date("2026-03-12T00:00:00Z"),
+        },
+      ]);
+      (mockSCM.getPRHeadSha as ReturnType<typeof vi.fn>).mockResolvedValue("abc123");
+
+      const createReq = makeRequest("/api/prs/432/review-resolutions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          threadId: "thread-missing-snapshots-apply",
+          resolutionType: "fixed",
+          fixCommitSha: "abc123",
+          evidence: {
+            changedFiles: ["src/a.ts"],
+            testCommands: ["pnpm test"],
+            testResults: ["pass"],
+          },
+        }),
+      });
+      const createRes = await reviewResolutionsPOST(createReq, {
+        params: Promise.resolve({ id: "432" }),
+      });
+      expect(createRes.status).toBe(201);
+
+      const verifyReq = makeRequest("/api/prs/432/review-resolutions/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: "thread-missing-snapshots-apply" }),
+      });
+      const verifyRes = await reviewVerifyPOST(verifyReq, {
+        params: Promise.resolve({ id: "432" }),
+      });
+      expect(verifyRes.status).toBe(200);
+
+      const original = mockSCM.getReviewThreadSnapshots;
+      mockSCM.getReviewThreadSnapshots = undefined as unknown as ReturnType<typeof vi.fn>;
+
+      const applyReq = makeRequest("/api/prs/432/review-resolutions/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: "thread-missing-snapshots-apply" }),
+      });
+      const applyRes = await reviewApplyPOST(applyReq, {
+        params: Promise.resolve({ id: "432" }),
+      });
+
+      expect(applyRes.status).toBe(422);
+      const data = await applyRes.json();
+      expect(data.error).toMatch(/full review thread snapshots/);
+      expect(
+        data.blockers.some((b: { code: string }) => b.code === "THREAD_SNAPSHOTS_UNAVAILABLE"),
+      ).toBe(true);
+
+      mockSCM.getReviewThreadSnapshots = original;
+    });
   });
 
   // ── GET /api/events (SSE) ──────────────────────────────────────────

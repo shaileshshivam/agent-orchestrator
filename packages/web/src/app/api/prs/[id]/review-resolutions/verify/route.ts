@@ -55,6 +55,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     );
   }
 
+  if (!scm.getReviewThreadSnapshots) {
+    return jsonWithCorrelation(
+      {
+        error: "SCM does not support full review thread snapshots",
+        blockers: [
+          {
+            code: "THREAD_SNAPSHOTS_UNAVAILABLE",
+            message: "SCM does not support full review thread snapshots",
+          },
+        ],
+      },
+      { status: 422 },
+      correlationId,
+    );
+  }
+
   const threads = await getThreadSnapshots(scm, session.pr);
   const thread = threads.find((t) => t.threadId === payload.threadId);
   if (!thread) {
