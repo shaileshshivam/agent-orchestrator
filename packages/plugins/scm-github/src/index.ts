@@ -27,6 +27,7 @@ import {
   type ReviewThreadSnapshot,
   type AutomatedComment,
   type MergeReadiness,
+  type SCMCheckRunInput,
 } from "@composio/ao-core";
 import {
   getWebhookHeader,
@@ -890,14 +891,7 @@ function createGitHubSCM(): SCM {
       ]);
     },
 
-    async publishCheckRun(input: {
-      pr: PRInfo;
-      name: string;
-      status: "completed";
-      conclusion: "success" | "failure";
-      summary: string;
-      text?: string;
-    }): Promise<void> {
+    async publishCheckRun(input: SCMCheckRunInput): Promise<void> {
       const headSha = await this.getPRHeadSha?.(input.pr);
       if (!headSha) return;
       await gh([
