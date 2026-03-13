@@ -874,7 +874,7 @@ function createGitHubSCM(): SCM {
           bodyHash: createHash("sha256").update(comment.body).digest("hex").slice(0, 16),
           severity: detectSeverity(comment.body),
           status: thread.isResolved ? "resolved" : "open",
-          capturedAt: parseDate(comment.createdAt),
+          capturedAt: new Date(),
         });
       }
       return snapshots;
