@@ -128,13 +128,6 @@ function createDirectTransport(): GraphQLTransport {
 
 type ComposioTools = Composio["tools"];
 
-function importComposioCore(): Promise<{ Composio: new (args: { apiKey: string }) => Composio }> {
-  const importer = new Function("moduleName", "return import(moduleName)") as (
-    moduleName: string,
-  ) => Promise<{ Composio: new (args: { apiKey: string }) => Composio }>;
-  return importer("@composio/core");
-}
-
 function createComposioTransport(apiKey: string, entityId: string): GraphQLTransport {
   // Lazy-load the Composio client — cached as a promise so the constructor
   // is called only once, even under concurrent requests.
@@ -144,7 +137,7 @@ function createComposioTransport(apiKey: string, entityId: string): GraphQLTrans
     if (!clientPromise) {
       clientPromise = (async () => {
         try {
-          const { Composio } = await importComposioCore();
+          const { Composio } = await import("@composio/core");
           const client = new Composio({ apiKey });
           return client.tools;
         } catch (err: unknown) {

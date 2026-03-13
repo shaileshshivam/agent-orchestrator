@@ -278,22 +278,20 @@ async function ensureTerminalTransportReady(port: number): Promise<boolean> {
 
   const deadline = Date.now() + TERMINAL_READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`http://localhost:${port}/api/terminal-health`);
-      if (res.ok) {
-        const body = (await res.json()) as {
-          services?: {
-            terminalWebsocket?: { healthy?: boolean };
-            directTerminalWebsocket?: { healthy?: boolean };
-          };
+    const res = await fetch(`http://localhost:${port}/api/terminal-health`).catch(() => null);
+    if (res?.ok) {
+      const body = (await res.json()) as {
+        services?: {
+          terminalWebsocket?: { healthy?: boolean };
+          directTerminalWebsocket?: { healthy?: boolean };
         };
-        const terminalHealthy = body.services?.terminalWebsocket?.healthy === true;
-        const directHealthy = body.services?.directTerminalWebsocket?.healthy === true;
-        if (terminalHealthy && directHealthy) {
-          return true;
-        }
+      };
+      const terminalHealthy = body.services?.terminalWebsocket?.healthy === true;
+      const directHealthy = body.services?.directTerminalWebsocket?.healthy === true;
+      if (terminalHealthy && directHealthy) {
+        return true;
       }
-    } catch {}
+    }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
