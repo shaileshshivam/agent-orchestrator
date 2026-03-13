@@ -7,6 +7,15 @@ import {
   getReviewResolutionStore,
 } from "@/lib/review-integrity";
 
+const RESOLUTION_TYPES = ["fixed", "already_fixed", "not_actionable", "duplicate"] as const;
+
+function isResolutionType(value: unknown): value is (typeof RESOLUTION_TYPES)[number] {
+  return (
+    typeof value === "string" &&
+    RESOLUTION_TYPES.includes(value as (typeof RESOLUTION_TYPES)[number])
+  );
+}
+
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const correlationId = getCorrelationId(_request);
   const { id } = await params;
@@ -24,7 +33,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const payload = body as {
     threadId?: string;
-    resolutionType?: "fixed" | "already_fixed" | "not_actionable" | "duplicate";
+    resolutionType?: unknown;
     actorId?: string;
     fixCommitSha?: string;
     rationale?: string;
@@ -41,6 +50,13 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   if (!payload.resolutionType) {
     return jsonWithCorrelation(
       { error: "resolutionType is required" },
+      { status: 400 },
+      correlationId,
+    );
+  }
+  if (!isResolutionType(payload.resolutionType)) {
+    return jsonWithCorrelation(
+      { error: `resolutionType must be one of: ${RESOLUTION_TYPES.join(", ")}` },
       { status: 400 },
       correlationId,
     );

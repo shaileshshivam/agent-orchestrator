@@ -136,7 +136,7 @@ function serializeRecord(record: ResolutionRecord): string {
     `id=${encodeValue(record.id)}`,
     `prNumber=${record.prNumber}`,
     `threadId=${encodeValue(record.threadId)}`,
-    `resolutionType=${record.resolutionType}`,
+    `resolutionType=${encodeValue(record.resolutionType)}`,
     `actorType=${record.actorType}`,
     `actorId=${encodeValue(record.actorId)}`,
     `verificationStatus=${record.verificationStatus}`,
@@ -183,7 +183,7 @@ function parseRecord(content: string): ResolutionRecord {
   const verificationStatus: VerificationStatus =
     status === "pass" || status === "fail" || status === "pending" ? status : "pending";
 
-  const parsedResolutionTypeRaw = raw["resolutionType"];
+  const parsedResolutionTypeRaw = decodeValue(raw["resolutionType"]);
   const resolutionType: ResolutionType =
     parsedResolutionTypeRaw === "fixed" ||
     parsedResolutionTypeRaw === "already_fixed" ||

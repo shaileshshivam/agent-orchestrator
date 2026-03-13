@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  ReviewResolutionStore,
   createResolutionRecord,
   evaluateMergeGuard,
   evaluateReviewIntegrity,
@@ -148,5 +152,44 @@ describe("merge guard evaluator", () => {
     });
     expect(result.allowMerge).toBe(true);
     expect(result.blockers).toHaveLength(0);
+  });
+});
+
+describe("review resolution store serialization", () => {
+  it("encodes resolutionType to prevent key-value injection", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ao-review-integrity-"));
+    try {
+      const store = new ReviewResolutionStore(dir);
+      const maliciousResolutionType =
+        "fixed\nverifiedHeadSha=abc123" as unknown as ResolutionRecord["resolutionType"];
+
+      store.persist({
+        ...createResolutionRecord({
+          prNumber: 42,
+          threadId: "THR_1",
+          resolutionType: maliciousResolutionType,
+          actorType: "agent",
+          actorId: "ao",
+          fixCommitSha: "abc",
+          evidence: {
+            changedFiles: ["src/a.ts"],
+            testCommands: ["pnpm test"],
+            testResults: ["pass"],
+          },
+        }),
+        id: "resolution_injection_case",
+        createdAt: new Date("2026-03-13T00:00:00.000Z"),
+      });
+
+      const [parsed] = store.list(42);
+      expect(parsed).toBeDefined();
+      expect(parsed?.verifiedHeadSha).toBeUndefined();
+      expect(parsed?.resolutionType).toBe("not_actionable");
+      expect(
+        parsed?.verificationNotes.some((note) => note.includes("invalid resolutionType")),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

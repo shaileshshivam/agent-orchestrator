@@ -857,6 +857,22 @@ describe("API Routes", () => {
       const applyRes = await reviewApplyPOST(applyReq, { params: Promise.resolve({ id: "432" }) });
       expect(applyRes.status).toBe(200);
     });
+
+    it("POST /api/prs/:id/review-resolutions rejects invalid resolutionType", async () => {
+      const req = makeRequest("/api/prs/432/review-resolutions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          threadId: "thread-invalid-type",
+          resolutionType: "custom",
+        }),
+      });
+
+      const res = await reviewResolutionsPOST(req, { params: Promise.resolve({ id: "432" }) });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toMatch(/resolutionType must be one of/);
+    });
   });
 
   // ── GET /api/events (SSE) ──────────────────────────────────────────
