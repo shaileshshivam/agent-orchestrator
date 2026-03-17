@@ -108,10 +108,11 @@ export interface DirectTerminalServer {
  * Separated from listen() so tests can control lifecycle.
  */
 export function createDirectTerminalServer(
-  tmuxPath?: string,
+  tmuxPath: string,
   // Parameter is provided by tests for future use, but current implementation
   // uses the global ptySpawn variable loaded at module import time.
   // Prefix with underscore to indicate intentionally unused for now.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _ptySpawnFn: SpawnFunction,
 ): DirectTerminalServer {
   const TMUX = tmuxPath ?? findTmux();
