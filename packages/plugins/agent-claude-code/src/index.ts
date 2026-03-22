@@ -38,7 +38,7 @@ function normalizePermissionMode(mode: string | undefined): "permissionless" | "
 
 /** Hook script content that updates session metadata on git/gh commands.
  *  Exported for integration testing. */
-// eslint-disable-next-line no-useless-escape
+/* eslint-disable no-useless-escape */
 export const METADATA_UPDATER_SCRIPT = `#!/usr/bin/env bash
 # Metadata Updater Hook for Agent Orchestrator
 #
@@ -171,6 +171,7 @@ fi
 echo '{}'
 exit 0
 `;
+/* eslint-enable no-useless-escape */
 
 // =============================================================================
 // Plugin Manifest

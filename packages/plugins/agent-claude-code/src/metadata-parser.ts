@@ -78,7 +78,8 @@ function parseCommands(commandStr: string): CommandInfo[] {
     }
 
     return commands;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_) {
     // If parsing fails, treat as single command with raw string
     return [{ words: [commandStr] }];
   }
@@ -88,7 +89,7 @@ function parseCommands(commandStr: string): CommandInfo[] {
  * Extract PR URL from command output.
  */
 function extractPRUrl(output: string): string | null {
-  const match = output.match(/https:\/\/github\.com\/[^\/\s]+\/[^\/\s]+\/pull\/\d+/);
+  const match = output.match(/https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+/);
   return match ? match[0] : null;
 }
 
@@ -98,7 +99,7 @@ function extractPRUrl(output: string): string | null {
 function matchCommand(words: string[], output: string): ParseResult | null {
   if (words.length === 0) return null;
 
-  const [cmd, arg1, arg2, arg3, ...rest] = words;
+  const [cmd, arg1, arg2, arg3, ..._rest] = words;
 
   // Check for: gh pr create
   if (cmd === "gh" && arg1 === "pr" && arg2 === "create") {
@@ -166,7 +167,8 @@ export function parseShellCommand(command: string, output: string): ParseResult 
     }
 
     return { type: "none" };
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_) {
     // Fallback to regex-based approach
     return parseWithRegex(command, output);
   }
@@ -245,6 +247,7 @@ function parseWithRegex(command: string, output: string): ParseResult {
  * Output format: TYPE:value (e.g., PR_CREATE:https://... or BRANCH:feature)
  */
 export function cli(): void {
+  /* eslint-disable no-console */
   const [, , command, output] = process.argv;
 
   if (!command) {
@@ -269,6 +272,7 @@ export function cli(): void {
     default:
       console.log("NONE");
   }
+  /* eslint-enable no-console */
 }
 
 // Run CLI if this is the main module
