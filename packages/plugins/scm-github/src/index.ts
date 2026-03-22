@@ -73,7 +73,7 @@ async function execCli(bin: ExecCommand, args: string[], cwd?: string): Promise<
 }
 
 // Module-level gh function
-let _gh = (args: string[]): Promise<string> => execCli("gh", args);
+const _gh = (args: string[]): Promise<string> => execCli("gh", args);
 
 async function gh(args: string[]): Promise<string> {
   return _gh(args);
