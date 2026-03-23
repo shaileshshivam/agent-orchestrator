@@ -93,7 +93,7 @@ export function ProjectSidebar({
   return (
     <aside
       className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]"
-      style={{ width: `${width}px` }}
+      style={{ width: `${Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))}px` }}
     >
       <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-3 py-3">
         <h2 className="text-[10px] font-bold uppercase tracking-[0.10em] text-[var(--color-text-tertiary)]">
