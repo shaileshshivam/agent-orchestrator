@@ -84,13 +84,18 @@ async function ghInDir(args: string[], cwd: string): Promise<string> {
 }
 
 /**
- * Wrapper that adds caching and deduplication to gh CLI calls.
+ * Wrapper that adds caching, deduplication, and batching to gh CLI calls.
+ *
+ * For `gh pr view` commands with --json fields, batching combines multiple
+ * concurrent requests for the same PR into a single API call.
  *
  * Flow:
  * 1. Generate cache key from arguments
  * 2. Check cache for existing unexpired value
- * 3. If cache miss, use dedupe() to avoid duplicate concurrent calls
- * 4. Execute gh CLI, cache result, return
+ * 3. If cache miss, check if this is a pr view with --json
+ * 4. If yes, use batch to combine concurrent requests
+ * 5. If no, use dedupe() to avoid duplicate concurrent calls
+ * 6. Execute gh CLI, cache result, return
  *
  * @param args - Arguments to pass to gh CLI
  * @returns CLI output (trimmed)
@@ -103,6 +108,37 @@ async function cachedGh(args: string[]): Promise<string> {
   const cached = ghCache.get<string>(cacheKey);
   if (cached !== null) {
     return cached;
+  }
+
+  // Determine if this is a batchable pr view call
+  const isPRViewWithJson =
+    args[0] === "pr" && args[1] === "view" && args.includes("--json");
+
+  if (isPRViewWithJson) {
+    // Extract repo and PR number for batching key
+    const repoIndex = args.indexOf("--repo");
+    const prNumber = args[2];
+    const repoFlag = repoIndex !== -1 ? args[repoIndex + 1] : "";
+    const prKey = `${repoFlag}:${prNumber}`;
+
+    // Use batching for concurrent pr view requests
+    return ghCache.dedupe(cacheKey, async () => {
+      const batchedResult = await ghCache.batchGhPRView(
+        prKey,
+        args,
+        async (fields) => {
+          const result = await _gh(["pr", "view", prNumber, "--repo", repoFlag, "--json", fields]);
+          // Cache the full batch result with all fields
+          ghCache.set(cacheKey, result, ttl);
+          return JSON.parse(result);
+        },
+      );
+
+      // Re-serialize to string as cachedGh returns string
+      return typeof batchedResult === "string"
+        ? batchedResult
+        : JSON.stringify(batchedResult);
+    });
   }
 
   // Cache miss - dedupe concurrent requests and execute

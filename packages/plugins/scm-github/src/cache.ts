@@ -20,9 +20,29 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
+/**
+ * Represents a batched PR view request.
+ * Multiple callers requesting different fields for the same PR
+ * get combined into a single gh CLI call.
+ */
+interface PRViewBatch {
+  /** PR identifier key: "owner:repo:number" */
+  prKey: string;
+  /** Set of all fields requested by callers */
+  requestedFields: Set<string>;
+  /** Resolver function that will be called with the full result */
+  resolve: (result: unknown) => void;
+  /** Reject function for errors */
+  reject: (err: unknown) => void;
+  /** Arguments to reconstruct the gh call */
+  baseArgs: string[];
+}
+
 export class GhCache {
   private cache = new Map<string, CacheEntry<unknown>>();
   private pendingRequests = new Map<string, Promise<unknown>>();
+  /** Batching queue for gh pr view calls */
+  private pendingBatches = new Map<string, PRViewBatch[]>();
 
   /**
    * TTL per operation (milliseconds)
@@ -213,6 +233,134 @@ export class GhCache {
   clear(): void {
     this.cache.clear();
     this.pendingRequests.clear();
+    this.pendingBatches.clear();
+  }
+
+  /**
+   * Batch multiple `gh pr view` calls for the same PR into a single API call.
+   *
+   * When multiple callers request different JSON fields for the same PR simultaneously,
+   * this combines all requested fields into one gh CLI call, then extracts
+   * the specific fields each caller needs.
+   *
+   * Example:
+   * - Caller A requests: `gh pr view 123 --json state,title`
+   * - Caller B requests: `gh pr view 123 --json reviews`
+   * - Single call: `gh pr view 123 --json state,title,reviews`
+   * - Caller A gets { state, title }
+   * - Caller B gets { reviews }
+   *
+   * @param prKey - PR identifier "owner:repo:number"
+   * @param args - Full gh CLI arguments including --json fields
+   * @param fn - Function to execute the gh CLI call
+   * @returns Result with only the requested fields
+   */
+  async batchGhPRView<T>(
+    prKey: string,
+    args: string[],
+    fn: (fields: string) => Promise<T>,
+  ): Promise<T> {
+    // Extract requested JSON fields from args
+    const jsonIndex = args.indexOf("--json");
+    if (jsonIndex === -1 || jsonIndex + 1 >= args.length) {
+      // No --json flag, execute directly
+      return fn("");
+    }
+
+    const requestedFields = args[jsonIndex + 1];
+
+    // Check if there's already a batch in progress for this PR
+    const existingBatch = this.pendingBatches.get(prKey);
+
+    if (existingBatch) {
+      // Add this request to existing batch
+      return new Promise<T>((resolve, reject) => {
+        const fieldsSet = new Set(requestedFields.split(","));
+        existingBatch.push({
+          prKey,
+          requestedFields: fieldsSet,
+          resolve,
+          reject,
+          baseArgs: args,
+        });
+        // Extend the existing batch's fields with new ones
+        const firstBatch = existingBatch[0];
+        firstBatch.requestedFields = new Set([...firstBatch.requestedFields, ...fieldsSet]);
+      });
+    }
+
+    // No existing batch - create a new one
+    const batch: PRViewBatch[] = [];
+    this.pendingBatches.set(prKey, batch);
+
+    const fieldsSet = new Set(requestedFields.split(","));
+    const promise = new Promise<T>((resolve, reject) => {
+      batch.push({
+        prKey,
+        requestedFields: fieldsSet,
+        resolve,
+        reject,
+        baseArgs: args,
+      });
+    });
+
+    // Process batch after a short delay to allow more requests to join
+    // This small window allows concurrent requests to be collected
+    setTimeout(() => {
+      this.processPRViewBatch(prKey, fn);
+    }, 5);
+
+    return promise;
+  }
+
+  /**
+   * Process a batch of PR view requests.
+   *
+   * Combines all requested fields into a single gh call, then distributes
+   * the results to all waiting callers.
+   */
+  private async processPRViewBatch<T>(
+    prKey: string,
+    fn: (fields: string) => Promise<T>,
+  ): Promise<void> {
+    const batch = this.pendingBatches.get(prKey);
+    if (!batch) return;
+
+    // Remove batch from pending queue
+    this.pendingBatches.delete(prKey);
+
+    if (batch.length === 0) return;
+
+    // Combine all requested fields
+    const allFields = Array.from(batch[0].requestedFields).join(",");
+
+    try {
+      // Execute single gh call with all fields
+      const fullResult = await fn(allFields);
+
+      // Distribute results to all callers, extracting only requested fields
+      for (const request of batch) {
+        if (typeof fullResult !== "object" || fullResult === null) {
+          request.resolve(fullResult);
+          continue;
+        }
+
+        // Extract only the fields this specific caller requested
+        const partial: Record<string, unknown> = {};
+        for (const field of request.requestedFields) {
+          if (field in fullResult) {
+            partial[field] = (fullResult as Record<string, unknown>)[field];
+          }
+        }
+
+        request.resolve(partial as T);
+      }
+    } catch (err) {
+      // Reject all callers if batch fails
+      for (const request of batch) {
+        request.reject(err);
+      }
+    }
   }
 }
 
