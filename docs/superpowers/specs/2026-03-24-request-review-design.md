@@ -59,13 +59,15 @@ Implement `requestReviewers` using the `gh` CLI, consistent with all other metho
 
 ```typescript
 async requestReviewers(pr: PRInfo, reviewers: string[]): Promise<void> {
-  await execCli("gh", [
+  await gh([
     "pr", "edit", String(pr.number),
+    "--repo", repoFlag(pr),
     ...reviewers.flatMap(r => ["--add-reviewer", r]),
-    "-R", pr.repo,
   ]);
 }
 ```
+
+> Uses the existing `gh()` helper and `repoFlag(pr)` pattern consistent with all other methods (e.g., `assignPRToCurrentUser`, `mergePR`, `closePR`).
 
 This adds individual users and team slugs (e.g., `org/team-name`) as reviewers via GitHub's native review request mechanism. Requested users receive GitHub notifications automatically.
 
@@ -117,7 +119,9 @@ For the "needs review" alert (currently lines 659-669):
 - Remove the `actionMessage` field (no longer sending agent messages for this action)
 - The button click calls `onRequestReview(pr.number)` instead of `handleAction` / `onSend`
 - Button label changes from "ask to post" to "request review" (clearer without Slack context)
-- On click: show "sent!" feedback for 2 seconds (same UX as today)
+- On click: optimistically show "sent!" feedback for 2 seconds (same UX as today — no loading/error state)
+
+**Note:** Adding `onRequestReview` to `AttentionZone` props also requires updating `areAttentionZonePropsEqual` (the custom memoization comparator) to include it.
 
 ## Files Changed
 
