@@ -12,8 +12,6 @@ import type { OrchestratorConfig } from "./types.js";
  * Safe for use in both `sh -c` and `execFile` contexts.
  */
 export function shellEscape(arg: string): string {
-  // Logging statement for test issue #649
-  console.log("shellEscape called with:", arg);
   return "'" + arg.replace(/'/g, "'\\''") + "'";
 }
 
